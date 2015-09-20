@@ -435,6 +435,34 @@ type_mismatch:
     exit(1);
 }
 
+inline pa_value OP_RIGHT(pa_value a, pa_value b) {
+    // Flow operator (right).
+    pa_value n;
+    list<pa_value> *l1, *l2;
+    list<pa_value>::iterator it;
+    switch(a.type) {
+        case pa_list:
+            switch(b.type) {
+                case pa_func:
+                    // map(list->list) with a func
+                    n = TYPE_LIST();
+                    l1 = PV2LIST(a);
+                    l2 = PV2LIST(n);
+                    for(it = l1->begin(); it != l1->end(); ++it){
+                        l2->push_back(FUNC_CALL(b, TYPE_LIST(*it), TYPE_DICT()));
+                    }
+                    return n;
+                default:
+                    goto type_mismatch;
+            }
+        default:
+            goto type_mismatch; 
+    }
+type_mismatch:
+    printf("Runtime Error: Type mismatch(->).\n");
+    exit(1);
+}
+
 
 inline pa_value OP_OR(pa_value a, pa_value b) {
     switch(a.type) {

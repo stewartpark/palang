@@ -9,4 +9,13 @@ if s < 1000 {
     print("Bigger than 1000\n")
 }
 
-print(s)
+print(s);
+
+# Map function
+two = range(1,9) -> func(x) = 2*x
+
+for x in two {
+    print(x)
+    print(" ")
+}
+print("\n")
