@@ -63,6 +63,8 @@ inline bool CBOOL(pa_value a) {
     switch(a.type) {
         case pa_integer:
                 return a.value.b;
+        case pa_bool:
+                return a.value.b;
         default:
             goto type_mismatch; 
     }
@@ -336,7 +338,7 @@ inline pa_value OP_EQ(pa_value a, pa_value b) {
         case pa_integer:
             switch(b.type) {
                 case pa_integer:
-                    return TYPE_INT(a.value.i64 == b.value.i64);
+                    return TYPE_BOOL(a.value.i64 == b.value.i64);
                 default:
                     goto type_mismatch;
             }
@@ -348,6 +350,39 @@ type_mismatch:
     exit(1);
 }
 
+inline pa_value OP_OR(pa_value a, pa_value b) {
+    switch(a.type) {
+        case pa_bool:
+            switch(b.type) {
+                case pa_bool:
+                    return TYPE_BOOL(a.value.b || b.value.b);
+                default:
+                    goto type_mismatch;
+            }
+        default:
+            goto type_mismatch; 
+    }
+type_mismatch:
+    printf("Runtime Error: Type mismatch(or).\n");
+    exit(1);
+}
+
+inline pa_value OP_AND(pa_value a, pa_value b) {
+    switch(a.type) {
+        case pa_bool:
+            switch(b.type) {
+                case pa_bool:
+                    return TYPE_BOOL(a.value.b && b.value.b);
+                default:
+                    goto type_mismatch;
+            }
+        default:
+            goto type_mismatch; 
+    }
+type_mismatch:
+    printf("Runtime Error: Type mismatch(or).\n");
+    exit(1);
+}
 
 inline pa_value OP_LEN(pa_value a) {
     list<pa_value>* l;
