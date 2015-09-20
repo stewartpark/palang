@@ -350,6 +350,92 @@ type_mismatch:
     exit(1);
 }
 
+inline pa_value OP_NEQ(pa_value a, pa_value b) {
+    switch(a.type) {
+        case pa_integer:
+            switch(b.type) {
+                case pa_integer:
+                    return TYPE_BOOL(a.value.i64 != b.value.i64);
+                default:
+                    goto type_mismatch;
+            }
+        default:
+            goto type_mismatch; 
+    }
+type_mismatch:
+    printf("Runtime Error: Type mismatch(!=).\n");
+    exit(1);
+}
+
+inline pa_value OP_GT(pa_value a, pa_value b) {
+    switch(a.type) {
+        case pa_integer:
+            switch(b.type) {
+                case pa_integer:
+                    return TYPE_BOOL(a.value.i64 > b.value.i64);
+                default:
+                    goto type_mismatch;
+            }
+        default:
+            goto type_mismatch; 
+    }
+type_mismatch:
+    printf("Runtime Error: Type mismatch(>).\n");
+    exit(1);
+}
+
+inline pa_value OP_GTE(pa_value a, pa_value b) {
+    switch(a.type) {
+        case pa_integer:
+            switch(b.type) {
+                case pa_integer:
+                    return TYPE_BOOL(a.value.i64 >= b.value.i64);
+                default:
+                    goto type_mismatch;
+            }
+        default:
+            goto type_mismatch; 
+    }
+type_mismatch:
+    printf("Runtime Error: Type mismatch(>=).\n");
+    exit(1);
+}
+
+inline pa_value OP_LT(pa_value a, pa_value b) {
+    switch(a.type) {
+        case pa_integer:
+            switch(b.type) {
+                case pa_integer:
+                    return TYPE_BOOL(a.value.i64 < b.value.i64);
+                default:
+                    goto type_mismatch;
+            }
+        default:
+            goto type_mismatch; 
+    }
+type_mismatch:
+    printf("Runtime Error: Type mismatch(<).\n");
+    exit(1);
+}
+
+inline pa_value OP_LTE(pa_value a, pa_value b) {
+    switch(a.type) {
+        case pa_integer:
+            switch(b.type) {
+                case pa_integer:
+                    return TYPE_BOOL(a.value.i64 <= b.value.i64);
+                default:
+                    goto type_mismatch;
+            }
+        default:
+            goto type_mismatch; 
+    }
+type_mismatch:
+    printf("Runtime Error: Type mismatch(<=).\n");
+    exit(1);
+}
+
+
 inline pa_value OP_OR(pa_value a, pa_value b) {
     switch(a.type) {
         case pa_bool:
@@ -380,7 +466,7 @@ inline pa_value OP_AND(pa_value a, pa_value b) {
             goto type_mismatch; 
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(or).\n");
+    printf("Runtime Error: Type mismatch(and).\n");
     exit(1);
 }
 
