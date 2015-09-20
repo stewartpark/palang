@@ -8,6 +8,8 @@ map(Suppress,"()[]{}:")
 COMMA, DOT, OP_ASSIGN = map(Suppress, ",.=")
 NEWLINE = Suppress(";")
 
+COMMENT = Literal('#') + restOfLine
+
 # Literals
 #FIXME Ident shouldn't be matched if it's a reserved keyword
 IDENT = Word(alphas)\
@@ -93,6 +95,7 @@ stat << Group((stat_if | stat_for | stat_break | stat_continue | stat_assign | s
 
 # Program
 program = ZeroOrMore(Group(stat)).setParseAction(lambda t: ["program", t])
+program.ignore(COMMENT)
  
 def parse(source):
   return program.parseString(source, parseAll=True)
