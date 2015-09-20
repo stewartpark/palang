@@ -75,11 +75,12 @@ VAR << Group(Suppress("var") + def_stat_block).setParseAction(lambda t: ["VAR", 
 expr << Group(operatorPrecedence(expr_literal, [
         (oneOf("* / mod"), 2, opAssoc.LEFT),
         (oneOf("+ -"), 2, opAssoc.LEFT),
-        (oneOf("== != > >= < <= -> <-"), 2, opAssoc.LEFT),
+        (oneOf("== != > >= < <="), 2, opAssoc.LEFT),
+        (oneOf("-> <-"), 2, opAssoc.LEFT),
         (oneOf("not"), 1, opAssoc.RIGHT),
         (oneOf("and"), 2, opAssoc.LEFT),
         (oneOf("or"), 2, opAssoc.LEFT),
-        (oneOf("& ? !"), 1, opAssoc.LEFT)
+        (oneOf("& ? !"), 1, opAssoc.LEFT),
 ])).setParseAction(lambda t: ["expr", t[0]])
 
 # Statements

@@ -17,7 +17,7 @@ if len(sys.argv) == 1:
         source = ""
         while True:
             line = raw_input()
-            if line:
+            if len(line):
                 source += line + '\n'
             else:
                 break

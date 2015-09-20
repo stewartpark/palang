@@ -213,15 +213,14 @@ class CppCompiler:
                 'and': 'OP_AND',
                 'or': 'OP_OR'
             }
-            src = ""
-            i = 0
+            src = self._expr_literal(ast[0])
+            i = 1
             while True:
-                src += opf[ast[i+1]] + '(' + self._expr_literal(ast[i]) + ','
+                src = opf[ast[i]] + '(' + src + ',' + self._expr_literal(ast[i+1]) + ')'
                 i += 2
-                if (len(ast)-i) == 1:
-                    src += self._expr_literal(ast[i])
-                    src += ')' * (i/2)
+                if len(ast) <= i:
                     break
+            open('/tmp/log','a').write(src+'\n')
             return src
     def _expr(self, ast):
         if ast[0] == 'expr':
