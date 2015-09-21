@@ -5,7 +5,7 @@ import parser, compiler
 
 CXX = os.environ.get("CXX", "c++")
 CXXFLAGS = os.environ.get("CXXFLAGS", "-O3 -std=c++11")
-PA_HOME = os.environ.get("PA_HOME", ".")
+PA_HOME = os.path.abspath(os.environ.get("PA_HOME", "."))
 
 pp = pprint.PrettyPrinter(indent=2,width=80)
 
@@ -34,10 +34,11 @@ else:
     f.write(cxx)
     f.close()
     CXXFLAGS += " -o " + options.output + " "
-    CXXFLAGS += " -I " + PA_HOME + "/include "
+    CXXFLAGS += " -I " + PA_HOME + "/include/ "
     if options.library:
         CXXFLAGS += " -c -fPIC -shared -Wl,-soname," + options.output + " "
-    cmdline = (CXX + " " + f.name + " " + CXXFLAGS).split()
+    cmdline = (CXX + " "  + CXXFLAGS + " " + f.name).split()
+    if options.verbose: print " ".join(cmdline)
     p = subprocess.Popen(cmdline, stderr=subprocess.PIPE)
     ret = p.wait()
     err = p.stderr.read()
