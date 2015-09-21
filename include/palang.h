@@ -65,7 +65,7 @@ inline pa_value* TYPE_NIL() {
 
 // Convert any value into a logical value
 inline bool LEXPR(pa_value* a) {
-    switch(a.type) {
+    switch(a->type) {
         case pa_integer:
                 return a->value.b;
         case pa_bool:
@@ -525,7 +525,7 @@ type_mismatch:
 // Utilities
 
 
-inline void PA_ENTER() {
+inline void PA_ENTER(int argc, char** argv, char** env) {
     nil = TYPE_NIL();
     range = TYPE_FUNC([](pa_value* args, pa_value* kwargs) -> pa_value* {
         pa_value *start = PARAM(args, kwargs, 0, "start", nil);
@@ -572,8 +572,9 @@ inline void PA_ENTER() {
     });
 }
 
-inline void PA_LEAVE() {
-
+inline int PA_LEAVE(pa_value *ret) {
+    //TODO Return value
+    return 0;
 }
 
 

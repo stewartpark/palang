@@ -11,13 +11,15 @@ class CppCompiler:
         self.src += src
     def enter_func(self):
         ns = dict(self.scope[-1])
+        for k in ns: 
+            ns[k] = 'r' # Make variables outside the scope readable
         self.scope.append(ns)
         self.new_vars.append({})
     def leave_func(self):
         self.scope.pop()
         self.new_vars.pop()
     def define(self, var_name):
-        self.scope[-1][var_name] = True
+        self.scope[-1][var_name] = 'w' # Defined in the scope. writeable.
         self.new_vars[-1][var_name] = True
     def get_reset_new_vars(self):
         r = self.new_vars[-1].keys()
@@ -25,16 +27,16 @@ class CppCompiler:
         return r
     def compile(self):
         _global = {}
-        for k in self.imports: _global[k] = True
-        for k in self.exports: _global[k] = True
-        for k in self.intrinsics: _global[k] = True
+        for k in self.imports: _global[k] = 'r'
+        for k in self.exports: _global[k] = 'w'
+        for k in self.intrinsics: _global[k] = 'r'
         self.scope = [_global, dict(_global)]
         self.new_vars = [{}]
         src = self._program(self.root)
         members = ""
-        members += "".join(map(lambda x: "extern pa_value " + x + ";", self.imports))
-        members += "".join(map(lambda x: "pa_value " + x + ";", self.exports))
-        return "%s\n%s;int main(int argc, char** argv, char **env){PA_ENTER();%s;PA_LEAVE();}\n" % (CppCompiler.HEADER, members, src)
+        members += "".join(map(lambda x: "extern pa_value* " + x + ";", self.imports))
+        members += "".join(map(lambda x: "pa_value* " + x + ";", self.exports))
+        return "%s\n%s;pa_value*PA_INIT(){%s};int main(int argc,char**argv,char**env){PA_ENTER(argc,argv,env);return PA_LEAVE(PA_INIT());}\n" % (CppCompiler.HEADER, members, src)
     # Rules
     def _program(self, ast):
         if ast[0] == 'program':
@@ -69,7 +71,7 @@ class CppCompiler:
                 for x in self.get_reset_new_vars():
                     s += "pa_value *" + x + ";"
                 sss += s + ss + '='
-                sss += "([=]()->pa_value*{" 
+                sss += "([=]()->pa_value*{" #FUNC 
                 for x in ast[1][1]:
                     sss += self._stat(x)
                 sss += "})()"
@@ -95,7 +97,7 @@ class CppCompiler:
             ident = ast[1][0]
             val = ast[1][1]
             stats = ast[1][2]
-            self.scope[-1][ident[1]] = True # make known. index var
+            self.scope[-1][ident[1]] = 'r' # make known. index var
             src += "{"
             src += "pa_value *__for_ref__=" + self._expr(val) + ";"
             src += "pa_value *__for_ref_len__=OP_LEN(__for_ref__);"
@@ -144,14 +146,14 @@ class CppCompiler:
             src = ""
             for s in ast[1]:
                 src += self._stat(s)
-            return "([=]->pa_value*{" + src + "})()"
+            return "([=]->pa_value*{" + src + "})()" #FUNC
         elif ast[0] == 'FUNC':
             src = ""
             args = ast[1][0]
             self.enter_func()
             for i, x in enumerate(args):
                 var_name = x[1][0][1]
-                self.scope[-1][var_name] = True
+                self.scope[-1][var_name] = 'w'
                 if len(x[1]) == 1:
                     df = "nil"
                 else:
@@ -160,7 +162,7 @@ class CppCompiler:
             for s in ast[1][1]:
                 src += self._stat(s)
             self.leave_func()
-            return "TYPE_FUNC([=](pa_value *args, pa_value *kwargs)->pa_value* {" + src + "})"
+            return "TYPE_FUNC([=](pa_value *args, pa_value *kwargs)->pa_value* {" + src + "})" #FUNC
         elif ast[0] == 'LIST':
             return "TYPE_LIST(" + ",".join(map(self._expr, ast[1])) + ")"
         elif ast[0] == 'DICT':
@@ -205,7 +207,6 @@ class CppCompiler:
                 i += 2
                 if len(ast) <= i:
                     break
-            open('/tmp/log','a').write(src+'\n')
             return src
     def _expr(self, ast):
         if ast[0] == 'expr':
@@ -216,7 +217,10 @@ class CppCompiler:
         if len(ast) == 1:
             var_name = ast[0][1] # IDENT
             if var_name in self.scope[-1]:
-                return var_name
+                if self.scope[-1][var_name] == 'w':
+                    return var_name
+                else:
+                    raise Exception("Variable is read-only in the scope: " + str(var_name))
             else:
                 self.define(var_name)
                 return var_name
