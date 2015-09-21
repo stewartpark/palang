@@ -1,0 +1,15 @@
+sum = 0
+fiba = 1
+fibb = 1
+
+go = func() {
+    fibc = fiba + fibb
+    fiba = fibb 
+    fibb = fibc
+    if fibc mod 2 == 0, sum = sum + fibc
+    if sum < 4000000, go()
+}
+
+go()
+
+print(sum)

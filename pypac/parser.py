@@ -12,7 +12,7 @@ COMMENT = Literal('#') + restOfLine
 
 # Literals
 #FIXME Ident shouldn't be matched if it's a reserved keyword
-IDENT = Word(alphas)\
+IDENT = Regex(r'[a-zA-Z_][a-zA-Z0-9_]*')\
         .setParseAction(lambda t: ["IDENT", t[0]])
 INTEGER = Combine(Optional(oneOf("+ -")) + Word(nums))\
     .setName("integer")\
@@ -45,6 +45,18 @@ expr_lvalue_attr = Group(DOT + IDENT)\
 expr_lvalue = Group(Group(IDENT) + ZeroOrMore(Group(expr_lvalue_item|expr_lvalue_attr)))\
         .setParseAction(lambda t: ["expr_lvalue", t[0]])
 
+expr_rvalue_item = Group(LBRACK + expr + RBRACK)\
+        .setParseAction(lambda t: ["expr_rvalue_item", t[0]])
+expr_rvalue_attr = Group(DOT + IDENT)\
+        .setParseAction(lambda t: ["expr_rvalue_item", t[0]])
+
+expr_func_kwarg = Group(Group(IDENT) + OP_ASSIGN + Group(expr)).setParseAction(lambda t: ['expr_func_kwarg', t[0]])
+expr_rvalue_call = (LPAREN + Group(Optional(delimitedList(Group(expr_func_kwarg|expr)))) + RPAREN)\
+        .setParseAction(lambda t: ["expr_rvalue_call", t[0]])
+
+expr_rvalue = Group(Group(IDENT) + ZeroOrMore(Group(expr_rvalue_item|expr_rvalue_attr|expr_rvalue_call)))\
+        .setParseAction(lambda t: ["expr_rvalue", t[0]])
+
 def_var = Group(expr_lvalue)\
         .setParseAction(lambda t: ["def_var", t[0]])
 
@@ -54,11 +66,7 @@ def_func_args = LPAREN + Optional(delimitedList(Group(def_func_arg))) + RPAREN
 def_func = Group(expr_lvalue + def_func_args)\
         .setParseAction(lambda t: ["def_func", t[0]])
 
-expr_func_kwarg = Group(Group(IDENT) + OP_ASSIGN + Group(expr)).setParseAction(lambda t: ['expr_func_kwarg', t[0]])
-expr_func_call = Group(Group(expr_lvalue) + LPAREN + Group(Optional(delimitedList(Group(expr_func_kwarg|expr)))) + RPAREN)\
-        .setParseAction(lambda t: ["expr_func_call", t[0]])
-
-expr_literal = Group(REAL | INTEGER | STRING | LIST | DICT | FUNC | VAR | expr_func_call | expr_lvalue)
+expr_literal = Group(REAL | INTEGER | STRING | LIST | DICT | FUNC | VAR | expr_rvalue)
 
 
 LIST << Group(LBRACK + Optional(delimitedList(Group(expr))) + RBRACK)\

@@ -64,12 +64,12 @@ class CppCompiler:
             t = ast[1][0]
             sss = ""
             if t[0] == 'def_var':
-                ss = self._expr_lvalue(t[1][1], define=True)
+                ss = self._expr_lvalue(t[1][1])
                 s = ""
                 for x in self.get_reset_new_vars():
-                    s += "pa_value " + x + ";"
+                    s += "pa_value *" + x + ";"
                 sss += s + ss + '='
-                sss += "([&]()->pa_value{" 
+                sss += "([=]()->pa_value*{" 
                 for x in ast[1][1]:
                     sss += self._stat(x)
                 sss += "})()"
@@ -97,10 +97,10 @@ class CppCompiler:
             stats = ast[1][2]
             self.scope[-1][ident[1]] = True # make known. index var
             src += "{"
-            src += "pa_value __for_ref__=" + self._expr(val) + ";"
-            src += "pa_value __for_ref_len__=OP_LEN(__for_ref__);"
-            src += "pa_value " + ident[1] + ";"
-            src += "for(int64_t __for_index__ = 0; __for_index__ < __for_ref_len__.value.i64; __for_index__++){"
+            src += "pa_value *__for_ref__=" + self._expr(val) + ";"
+            src += "pa_value *__for_ref_len__=OP_LEN(__for_ref__);"
+            src += "pa_value *" + ident[1] + ";"
+            src += "for(int64_t __for_index__ = 0; __for_index__ < __for_ref_len__->value.i64; __for_index__++){"
             src += ident[1] + "=OP_ITEM(__for_ref__, TYPE_INT(__for_index__));"
             src += "".join(map(self._stat, stats))
             src += "}}"
@@ -132,23 +132,8 @@ class CppCompiler:
             return "return " + self._expr(ast[1]);
     # Expressions
     def _expr_literal(self, ast):
-        if ast[0] == 'expr_lvalue':
-            return self._expr_lvalue(ast[1])
-        elif ast[0] == 'expr_func_call':
-            fc = ast[1]
-            __args = filter(lambda x: x[0] == 'expr', fc[1]) 
-            __kwargs = filter(lambda x: x[0] == 'expr_func_kwarg', fc[1]) 
-            # args
-            s_args = ""
-            for x in __args:
-                s_args += self._expr(x) + ","
-            s_args = s_args[:-1]
-            # kwargs
-            s_kwargs = ""
-            for x in __kwargs:
-                s_kwargs += "TYPE_DICT_KV(TYPE_STRING(\"" + x[1][0][1] + "\")," + self._expr(x[1][1]) + "),"
-            s_kwargs = s_kwargs[:-1]
-            return "FUNC_CALL(" + self._expr_lvalue(fc[0][1]) + ",TYPE_LIST(" + s_args + "),TYPE_DICT(" + s_kwargs + "))"
+        if ast[0] == 'expr_rvalue':
+            return self._expr_rvalue(ast[1])
         elif ast[0] == 'INTEGER':
             return "TYPE_INT(" + str(ast[1]) + ")"
         elif ast[0] == 'REAL':
@@ -159,7 +144,7 @@ class CppCompiler:
             src = ""
             for s in ast[1]:
                 src += self._stat(s)
-            return "([&]->pa_value{" + src + "})()"
+            return "([=]->pa_value*{" + src + "})()"
         elif ast[0] == 'FUNC':
             src = ""
             args = ast[1][0]
@@ -171,11 +156,11 @@ class CppCompiler:
                     df = "nil"
                 else:
                     df = self._expr(x[1][1])
-                src += "pa_value " + var_name + "=PARAM(args,kwargs," + str(i) + ",\"" + var_name + "\"," + df + ");"
+                src += "pa_value*" + var_name + "=PARAM(args,kwargs," + str(i) + ",\"" + var_name + "\"," + df + ");"
             for s in ast[1][1]:
                 src += self._stat(s)
             self.leave_func()
-            return "TYPE_FUNC([&](pa_value args, pa_value kwargs)->pa_value {" + src + "})"
+            return "TYPE_FUNC([=](pa_value *args, pa_value *kwargs)->pa_value* {" + src + "})"
         elif ast[0] == 'LIST':
             return "TYPE_LIST(" + ",".join(map(self._expr, ast[1])) + ")"
         elif ast[0] == 'DICT':
@@ -227,23 +212,20 @@ class CppCompiler:
             return self._expr_recur(ast[1])
         else:
             raise Exception("Semantic error")
-    def _expr_lvalue(self, ast, define=False):
+    def _expr_lvalue(self, ast):
         if len(ast) == 1:
             var_name = ast[0][1] # IDENT
             if var_name in self.scope[-1]:
                 return var_name
             else:
-                if define:
-                    self.define(var_name)
-                    return var_name
-                else:
-                    raise Exception("No such variable in the scope: " + var_name)
+                self.define(var_name)
+                return var_name
         else:
             src = ""
             i = 0
             while True:
                 if ast[i][0] == 'IDENT':
-                    src += self._expr_lvalue([ast[i]], define=define)
+                    src += self._expr_lvalue([ast[i]])
                 elif ast[i][0] == 'expr_lvalue_item':
                     src = "OP_ITEM(" + src + "," + self._expr(ast[i][1]) + ")"
                 elif ast[i][0] == 'expr_lvalue_attr':
@@ -254,7 +236,47 @@ class CppCompiler:
                 if len(ast) <= i:
                     break
             return src
+    def _expr_rvalue(self, ast):
+        if len(ast) == 1:
+            var_name = ast[0][1] # IDENT
+            if var_name in self.scope[-1]:
+                return var_name
+            else:
+                raise Exception("No such variable in the scope: " + var_name)
+        else:
+            src = ""
+            i = 0
+            while True:
+                if ast[i][0] == 'IDENT':
+                    src += self._expr_rvalue([ast[i]])
+                elif ast[i][0] == 'expr_rvalue_item':
+                    src = "OP_ITEM(" + src + "," + self._expr(ast[i][1]) + ")"
+                elif ast[i][0] == 'expr_rvalue_attr':
+                    src = "OP_ATTR(" + src + "," + self._expr(ast[i][1]) + ")"
+                elif ast[i][0] == 'expr_rvalue_call':
+                    fargs = ast[i][1]
+                    __args = filter(lambda x: x[0] == 'expr', fargs) 
+                    __kwargs = filter(lambda x: x[0] == 'expr_func_kwarg', fargs)
+                    # args
+                    s_args = ""
+                    for x in __args:
+                        s_args += self._expr(x) + ","
+                    s_args = s_args[:-1]
+                    # kwargs
+                    s_kwargs = ""
+                    for x in __kwargs:
+                        s_kwargs += "TYPE_DICT_KV(TYPE_STRING(\"" + x[1][0][1] + "\")," + self._expr(x[1][1]) + "),"
+                    s_kwargs = s_kwargs[:-1]
+                    src ="FUNC_CALL(" + src + ",TYPE_LIST(" + s_args + "),TYPE_DICT(" + s_kwargs + "))"
+                else:
+                    raise Exception("Semantic error")
+                i += 1
+                if len(ast) <= i:
+                    break
+            return src
               
+
+         
 
         
 
