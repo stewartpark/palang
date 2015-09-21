@@ -1,0 +1,12 @@
+N = range(0,10)
+f(x) = 2*x
+
+printList(L) {
+    for x in L, print(x, "\n")
+}
+
+print("Original: \n")
+printList(N)
+
+print("Mapped f: \n")
+printList(N -> f)
