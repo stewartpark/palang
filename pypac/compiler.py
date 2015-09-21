@@ -2,7 +2,7 @@
 
 class CppCompiler:
     HEADER = "/* Automatically compiled from Pa language */\n#include <palang.h>"
-    def __init__(self, ast, exports=[], imports=[], intrinsics=["nil", "range", "print"]):
+    def __init__(self, ast, exports=[], imports=[], intrinsics=["nil", "range", "print", "input"]):
         self.root = ast
         self.exports = exports
         self.imports = imports

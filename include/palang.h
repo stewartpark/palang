@@ -56,6 +56,7 @@ list<pa_value*> pool;
 pa_value *nil; 
 pa_value *print; 
 pa_value *range;
+pa_value *input;
 
 // Types
 
@@ -569,6 +570,12 @@ inline void PA_ENTER(int argc, char** argv, char** env) {
             }
         }
         return nil;
+    });
+    input = TYPE_FUNC([](pa_value* args, pa_value* kwargs) -> pa_value* {
+        long long int N;
+        scanf("%lld", &N);
+        pa_value* n = TYPE_INT(N);
+        return n;
     });
 }
 
