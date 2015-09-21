@@ -544,24 +544,28 @@ inline void PA_ENTER() {
         }
     });
     print = TYPE_FUNC([](pa_value* args, pa_value* kwargs) -> pa_value* {
-        pa_value *msg = PARAM(args, kwargs, 0, "msg", nil);
-        switch(msg->type) {
-            case pa_nil:
-                printf("nil");
-                break;
-            case pa_integer:
-                printf("%lld", (long long int)msg->value.i64);
-                break;
-            case pa_float:
-                printf("%lf", (double)msg->value.f64);
-                break;
-            case pa_string:
-                printf("%s", PV2STR(msg)->c_str());
-                break;
-            default:
-                printf("Runtime Error: print() cannot print the value. (Type:%d)\n", msg->type);
-                exit(1);
-                break;
+        list<pa_value*> *_args = PV2LIST(args);
+        list<pa_value*>::iterator it;
+        for(it = _args->begin(); it != _args->end(); ++it) {
+            pa_value* msg = *it;
+            switch(msg->type) {
+                case pa_nil:
+                    printf("nil");
+                    break;
+                case pa_integer:
+                    printf("%lld", (long long int)msg->value.i64);
+                    break;
+                case pa_float:
+                    printf("%lf", (double)msg->value.f64);
+                    break;
+                case pa_string:
+                    printf("%s", PV2STR(msg)->c_str());
+                    break;
+                default:
+                    printf("Runtime Error: print() cannot print the value. (Type:%d)\n", msg->type);
+                    exit(1);
+                    break;
+            }
         }
         return nil;
     });
