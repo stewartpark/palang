@@ -75,24 +75,42 @@ class CppCompiler:
     def _stat_assign(self, ast):
         if ast[0] == 'stat_assign':
             t = ast[1][0]
-            sss = ""
             if t[0] == 'def_var':
-                ss = self._expr_lvalue(t[1][1])
-                s = ""
+                src = ""
+                lv = self._expr_lvalue(t[1][1])
+                def_vars = ""
                 for x in self.get_reset_new_vars():
-                    s += "pa_value *" + x + ";"
-                sss += s + ss + '='
-                sss += "([=]()->pa_value*{" #FUNC 
+                    def_vars += "pa_value *" + x + ";"
+                src += def_vars + lv + '='
+                src += "([=]()->pa_value*{" #FUNC 
                 self.enter_func()
                 for x in ast[1][1]:
-                    sss += self._stat(x)
+                    src += self._stat(x)
                 self.leave_func()
-                sss += "})()"
+                src += "})()"
+                return src
             elif t[0] == 'def_func':
-                raise Exception("Not implemented") 
+                src = ""
+                lv = self._expr_lvalue(t[1][0][1])
+                def_vars = ""
+                for x in self.get_reset_new_vars():
+                    def_vars += "pa_value *" + x + ";"
+                args = t[1][1]
+                self.enter_func()
+                for i, x in enumerate(args):
+                    var_name = x[1][0][1]
+                    self.scope[-1][var_name] = 'w'
+                    if len(x[1]) == 1:
+                        df = "nil"
+                    else:
+                        df = self._expr(x[1][1])
+                    src += "pa_value*" + var_name + "=PARAM(args,kwargs," + str(i) + ",\"" + var_name + "\"," + df + ");"
+                for s in ast[1][1]:
+                    src += self._stat(s)
+                self.leave_func()
+                return def_vars + lv + "=TYPE_FUNC([=](pa_value *args, pa_value *kwargs)->pa_value* {" + src + "})" #FUNC
             else:
                 raise Exception("Semantic error")
-            return sss
         else:
             raise Exception("Semantic error")
     def _stat_expr(self, ast):

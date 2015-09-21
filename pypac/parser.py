@@ -63,7 +63,7 @@ def_var = Group(expr_lvalue)\
 def_stat_block = (Group(stat_one_line))|(LBRACE + ZeroOrMore(Group(stat)) + RBRACE)
 def_func_arg = Group(Group(IDENT) + Optional(OP_ASSIGN + Group(expr))).setParseAction(lambda t: ['def_func_arg', t[0]])
 def_func_args = LPAREN + Optional(delimitedList(Group(def_func_arg))) + RPAREN
-def_func = Group(expr_lvalue + def_func_args)\
+def_func = Group(Group(expr_lvalue) + Group(def_func_args))\
         .setParseAction(lambda t: ["def_func", t[0]])
 
 expr_literal = Group(REAL | INTEGER | STRING | LIST | DICT | FUNC | VAR | expr_rvalue)
