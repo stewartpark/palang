@@ -13,6 +13,7 @@ opt = OptionParser()
 opt.add_option("-o", "--output", dest="output", default="a.out", help="output file", metavar="FILE")
 opt.add_option("-v", "--verbose", dest="verbose", default=False, help="verbose mode", action="store_true")
 opt.add_option("-c", "--cpp", dest="cpp", default=False, help="generate a C++ source code file instead of an executable.", action="store_true")
+opt.add_option("-s", "--static", dest="static", default=False, help="link C++ runtime libraries statically.", action="store_true")
 opt.add_option("-l", "--library", dest="library", default=False, help="build as a library.", action="store_true")
 
 options, args = opt.parse_args()
@@ -37,6 +38,8 @@ else:
     CXXFLAGS += " -I " + PA_HOME + "/include/ "
     if options.library:
         CXXFLAGS += " -c -fPIC -shared -Wl,-soname," + options.output + " "
+    if options.static:
+        CXXFLAGS += " -static-libgcc -static-libstdc++ "
     cmdline = (CXX + " "  + CXXFLAGS + " " + f.name).split()
     if options.verbose: print " ".join(cmdline)
     p = subprocess.Popen(cmdline, stderr=subprocess.PIPE)
