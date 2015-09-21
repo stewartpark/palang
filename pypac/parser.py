@@ -95,12 +95,13 @@ expr << Group(operatorPrecedence(expr_literal, [
 expr_stat_block = ((COMMA + Group(stat))|(LBRACE + ZeroOrMore(Group(stat)) + RBRACE))
 stat_if = Group(Suppress("if") + Group(Group(expr) + Group(expr_stat_block)) + ZeroOrMore(Group(Suppress("elif") + Group(expr) + Group(expr_stat_block))) + Optional(Group(Suppress("else") + Group(expr_stat_block)))).setParseAction(lambda t: ["stat_if", t[0]])
 stat_for = Group(Suppress("for") + Group(IDENT) + Suppress("in") + Group(expr) + Group(expr_stat_block)).setParseAction(lambda t: ["stat_for", t[0]])
+stat_while = Group(Suppress("while") + Group(expr) + Group(expr_stat_block)).setParseAction(lambda t: ["stat_while", t[0]])
 stat_assign = Group(Group(def_func|def_var) + Group(def_stat_block)).setParseAction(lambda t: ["stat_assign", t[0]])
 stat_ret << Group(OP_ASSIGN + expr).setParseAction(lambda t: ["stat_ret", t[0]])
 stat_expr = Group(expr).setParseAction(lambda t: ["stat_expr", t[0]])
 stat_break = Group(Suppress("break")).setParseAction(lambda t: ["stat_break"])
 stat_continue = Group(Suppress("continue")).setParseAction(lambda t: ["stat_continue"])
-stat << Group((stat_if | stat_for | stat_break | stat_continue | stat_assign | stat_ret | stat_expr) + Optional(NEWLINE)).setParseAction(lambda t: ["stat", t[0]])
+stat << Group((stat_if | stat_for | stat_while | stat_break | stat_continue | stat_assign | stat_ret | stat_expr) + Optional(NEWLINE)).setParseAction(lambda t: ["stat", t[0]])
 
 # Program
 program = ZeroOrMore(Group(stat)).setParseAction(lambda t: ["program", t])

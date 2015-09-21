@@ -15,9 +15,18 @@ class CppCompiler:
             ns[k] = 'r' # Make variables outside the scope readable
         self.scope.append(ns)
         self.new_vars.append({})
+        self.scope_prop.append('c') # The scope type is closure.
+    def enter_loop(self):
+        ns = dict(self.scope[-1]) # Copy as is.
+        self.scope.append(ns)
+        self.new_vars.append({})
+        self.scope_prop.append('bl') # The scope type is a basic block + loop. (no closure)
     def leave_func(self):
         self.scope.pop()
         self.new_vars.pop()
+        self.scope_prop.pop()
+    def leave_loop(self):
+        self.leave_func()
     def define(self, var_name):
         self.scope[-1][var_name] = 'w' # Defined in the scope. writeable.
         self.new_vars[-1][var_name] = True
@@ -32,6 +41,7 @@ class CppCompiler:
         for k in self.intrinsics: _global[k] = 'r'
         self.scope = [_global, dict(_global)]
         self.new_vars = [{}]
+        self.scope_prop = ['c']
         src = self._program(self.root)
         members = ""
         members += "".join(map(lambda x: "extern pa_value* " + x + ";", self.imports))
@@ -53,6 +63,7 @@ class CppCompiler:
                 'stat_assign': self._stat_assign,
                 'stat_expr': self._stat_expr,
                 'stat_for': self._stat_for,
+                'stat_while': self._stat_while,
                 'stat_break': self._stat_break,
                 'stat_continue': self._stat_continue,
                 'stat_if': self._stat_if,
@@ -92,7 +103,7 @@ class CppCompiler:
             raise Exception("Semantic error")
     def _stat_for(self, ast):
         if ast[0] == 'stat_for':
-            self.enter_func() 
+            self.enter_loop() 
             src = ""
             ident = ast[1][0]
             val = ast[1][1]
@@ -106,15 +117,33 @@ class CppCompiler:
             src += ident[1] + "=OP_ITEM(__for_ref__, TYPE_INT(__for_index__));"
             src += "".join(map(self._stat, stats))
             src += "}}"
-            self.leave_func()
+            self.leave_loop()
             return src
         else:
             raise Exception("Semantic error")
-    # Error catch - break/continue when not in loop
+    def _stat_while(self, ast):
+        if ast[0] == 'stat_while':
+            self.enter_loop() 
+            src = ""
+            val = ast[1][0]
+            stats = ast[1][1]
+            src += "while(LEXPR(" + self._expr(val) + ")){"
+            src += "".join(map(self._stat, stats))
+            src += "}"
+            self.leave_loop()
+            return src
+        else:
+            raise Exception("Semantic error")
     def _stat_break(self, ast):
-        return "break"
+        if 'l' in self.scope_prop[-1]: # type should be l(loop)
+            return "break"
+        else:
+            raise Exception("Cannot use break outside a loop")
     def _stat_continue(self, ast):
-        return "continue"
+        if 'l' in self.scope_prop[-1]: # type should be l(loop)
+            return "continue"
+        else:
+            raise Exception("Cannot use continue outside a loop")
     def _stat_if(self, ast):
         if ast[0] == 'stat_if':
             src = ""
