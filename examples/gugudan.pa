@@ -1,0 +1,16 @@
+gugudan = func(n) {
+    = func(y) {
+        = [n, y, n*y]
+    }
+}
+table = range(1,10)
+
+for n in range(2,9), 
+    for x in table->gugudan(n) {
+        print(x[0])
+        print("*")
+        print(x[1])
+        print("=")
+        print(x[2])
+        print("\n")
+    }
