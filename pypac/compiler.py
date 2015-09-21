@@ -119,9 +119,9 @@ class CppCompiler:
             meat = ast[1]
             for i, x in enumerate(meat):
                 if i == 0:
-                    src += "if(CBOOL(" + self._expr(x[0]) + ")){" + ("".join(map(self._stat, x[1]))) + "}"
+                    src += "if(LEXPR(" + self._expr(x[0]) + ")){" + ("".join(map(self._stat, x[1]))) + "}"
                 elif len(x) == 2:
-                    src += "else if(CBOOL(" + self._expr(x[0]) + ")){" + ("".join(map(self._stat, x[1]))) + "}"
+                    src += "else if(LEXPR(" + self._expr(x[0]) + ")){" + ("".join(map(self._stat, x[1]))) + "}"
                 else:
                     src += "else{" + ("".join(map(self._stat, x[0]))) + "}"
             return src

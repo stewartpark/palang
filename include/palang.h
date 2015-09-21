@@ -63,12 +63,13 @@ inline pa_value* TYPE_NIL() {
     return nil;
 }
 
-inline bool CBOOL(pa_value a) {
+// Convert any value into a logical value
+inline bool LEXPR(pa_value* a) {
     switch(a.type) {
         case pa_integer:
-                return a.value.b;
+                return a->value.b;
         case pa_bool:
-                return a.value.b;
+                return a->value.b;
         default:
             goto type_mismatch; 
     }
