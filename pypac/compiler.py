@@ -337,5 +337,5 @@ class CppCompiler:
 
         
 
-def compile(ast, compiler=CppCompiler):
-    return compiler(ast).compile()
+def compile(ast, compiler=CppCompiler, **kwargs):
+    return compiler(ast, **kwargs).compile()

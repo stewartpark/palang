@@ -1,28 +1,46 @@
-import parser
-import compiler
-import pprint
-import sys
+import sys, os, subprocess, pprint
+from tempfile import NamedTemporaryFile
+from optparse import OptionParser
+import parser, compiler
 
-def go(source):
-    pp = pprint.PrettyPrinter(indent=2, width=1)
-    ast = parser.parse(source)
-    print "/*"
-    pp.pprint(eval(str(ast)))
-    print "*/"
-    c = compiler.compile(ast)
-    print c
+CXX = os.environ.get("CXX", "c++")
+CXXFLAGS = os.environ.get("CXXFLAGS", "-O3 -std=c++11")
+PA_HOME = os.environ.get("PA_HOME", ".")
 
-if len(sys.argv) == 1:
-    while True:
-        source = ""
-        while True:
-            line = raw_input()
-            if len(line):
-                source += line + '\n'
-            else:
-                break
-        go(source)
+pp = pprint.PrettyPrinter(indent=2,width=80)
+
+opt = OptionParser()
+opt.add_option("-o", "--output", dest="output", default="a.out", help="output file", metavar="FILE")
+opt.add_option("-v", "--verbose", dest="verbose", default=False, help="verbose mode", action="store_true")
+opt.add_option("-c", "--cpp", dest="cpp", default=False, help="generate a C++ source code file instead of an executable.", action="store_true")
+opt.add_option("-l", "--library", dest="library", default=False, help="build as a library.", action="store_true")
+
+options, args = opt.parse_args()
+
+if len(args) == 0:
+    opt.print_help()
+    exit(1)
+
+source = "\n".join(map(lambda x: open(x).read(), args))
+
+ast = parser.parse(source)
+
+cxx = compiler.compile(ast, is_library=options.library)
+
+if options.cpp:
+    open(options.output, 'w').write(cxx)
 else:
-    source = open(sys.argv[1]).read()
-    go(source)
-
+    f = NamedTemporaryFile(suffix='.cc', delete=False)
+    f.write(cxx)
+    f.close()
+    CXXFLAGS += " -o " + options.output + " "
+    CXXFLAGS += " -I " + PA_HOME + "/include "
+    if options.library:
+        CXXFLAGS += " -c -fPIC -shared -Wl,-soname," + options.output + " "
+    cmdline = (CXX + " " + f.name + " " + CXXFLAGS).split()
+    p = subprocess.Popen(cmdline, stderr=subprocess.PIPE)
+    ret = p.wait()
+    err = p.stderr.read()
+    os.unlink(f.name)
+    if ret: print 'Internal Error!'
+    if options.verbose and err: print err

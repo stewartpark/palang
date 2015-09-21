@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <cstdlib>
 #include <list>
 #include <map>
 #include <string>
@@ -61,7 +62,10 @@ pa_value *input;
 // Types
 
 inline pa_value* TYPE_NIL() {
-    return nil;
+    pa_value *r = new pa_value;
+    r->type = pa_nil;
+    pool.push_back(r);
+    return r;
 }
 
 // Convert any value into a logical value
@@ -174,7 +178,7 @@ pa_value* PARAM(pa_value *args, pa_value *kwargs, const size_t nth, const string
         advance(it, nth);
         return *it;
     } else {
-        if(def == nil) {
+        if(def->type == pa_nil) {
             printf("Runtime Error: %s is required.\n", name.c_str());
             exit(1);
         } else {
@@ -573,7 +577,7 @@ inline void PA_ENTER(int argc, char** argv, char** env) {
     });
     input = TYPE_FUNC([](pa_value* args, pa_value* kwargs) -> pa_value* {
         long long int N;
-        scanf("%lld", &N);
+        register int t = scanf("%lld", &N);
         pa_value* n = TYPE_INT(N);
         return n;
     });
