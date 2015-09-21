@@ -83,8 +83,10 @@ class CppCompiler:
                     s += "pa_value *" + x + ";"
                 sss += s + ss + '='
                 sss += "([=]()->pa_value*{" #FUNC 
+                self.enter_func()
                 for x in ast[1][1]:
                     sss += self._stat(x)
+                self.leave_func()
                 sss += "})()"
             elif t[0] == 'def_func':
                 raise Exception("Not implemented") 
@@ -173,9 +175,11 @@ class CppCompiler:
             return "TYPE_STRING(\"" + ast[1] + "\")"
         elif ast[0] == 'VAR':
             src = ""
+            self.enter_func()
             for s in ast[1]:
                 src += self._stat(s)
-            return "([=]->pa_value*{" + src + "})()" #FUNC
+            self.leave_func()
+            return "([=]()->pa_value*{" + src + "})()" #FUNC
         elif ast[0] == 'FUNC':
             src = ""
             args = ast[1][0]
