@@ -2,7 +2,7 @@ sum = 0
 fib_a = 0
 fib_b = 1
 
-while(sum < 4000000) {
+while sum < 4000000 {
     # Calc the current value
     fib = fib_a + fib_b
 
