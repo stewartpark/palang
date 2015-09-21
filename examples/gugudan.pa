@@ -1,4 +1,4 @@
-gugudan = func(n) {
+gugudan(n) {
     = func(y) {
         = [n, y, n*y]
     }
