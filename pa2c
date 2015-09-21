@@ -1,4 +1,4 @@
 #!/bin/sh
 CPP=${2:-out.cpp}
 cat ./include/palang.h > $CPP
-python pypac $1 >> $CPP 
+python pypac $1 | grep -v "#include <palang.h>" >> $CPP 

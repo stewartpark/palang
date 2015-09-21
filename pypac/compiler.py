@@ -46,7 +46,7 @@ class CppCompiler:
         members = ""
         members += "".join(map(lambda x: "extern pa_value* " + x + ";", self.imports))
         members += "".join(map(lambda x: "pa_value* " + x + ";", self.exports))
-        return "%s\n%s;pa_value*PA_INIT(){%s};int main(int argc,char**argv,char**env){PA_ENTER(argc,argv,env);return PA_LEAVE(PA_INIT());}\n" % (CppCompiler.HEADER, members, src)
+        return "%s\n%s;pa_value*PA_INIT(){pa_value* __ret__=nil;%s;return __ret__;};int main(int argc,char**argv,char**env){PA_ENTER(argc,argv,env);return PA_LEAVE(PA_INIT());}\n" % (CppCompiler.HEADER, members, src)
     # Rules
     def _program(self, ast):
         if ast[0] == 'program':
