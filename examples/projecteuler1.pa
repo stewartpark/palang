@@ -5,4 +5,4 @@ for x in range(1,999),
     if x mod 3 == 0 or x mod 5 == 0,
         s = s + x
 
-print(s)
+print(s, "\n")

@@ -22,7 +22,7 @@ REAL    = Combine(Optional(oneOf("+ -")) + Word(nums) + "." +
                Optional(oneOf("e E")+Optional(oneOf("+ -")) +Word(nums)))\
     .setName("real")\
     .setParseAction(lambda t: ["REAL", float(t[0])])
-STRING  = QuotedString('"', multiline=True)\
+STRING  = QuotedString('"', multiline=False)\
         .setName("string")\
         .setParseAction(lambda t: ["STRING", t[0]])
 LIST    = Forward()
