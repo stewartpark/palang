@@ -3,7 +3,7 @@
 class CppCompiler:
     HEADER = "/* Automatically compiled from Pa language */\n#include <palang.h>"
     ENTRYPOINT = "int main(int argc,char**argv,char**env){PA_ENTER(argc,argv,env);return PA_LEAVE(PA_INIT());}"
-    def __init__(self, ast, exports=[], imports=[], intrinsics=["nil", "range", "print", "input"], is_library=False):
+    def __init__(self, ast, exports=[], imports=[], intrinsics=["range", "print", "input"], is_library=False):
         self.root = ast
         self.exports = exports
         self.imports = imports
@@ -29,36 +29,46 @@ class CppCompiler:
         self.scope_prop.pop()
     def leave_loop(self):
         self.leave_func()
-    def define(self, var_name):
-        self.scope[-1][var_name] = 'w' # Defined in the scope. writeable.
+    def define(self, var_name, read_only=False):
+        self.scope[-1][var_name] = 'w' if not read_only else 'r' # Defined in the scope. writeable.
         self.new_vars[-1][var_name] = True
+    def import_(self, lib_name, my_name, is_static=False):
+        self.scope[-1][my_name] = 'xr' # External, read-only.
+        self.imports.append([lib_name, my_name, is_static])
+    def export_(self, var_name, my_name=None):
+        self.scope[-1][var_name] = 'xw' # External, writeable. 
+        if my_name:
+            self.exports.append([var_name, my_name])
+        else:
+            self.exports.append([var_name, var_name])
     def get_reset_new_vars(self):
         r = self.new_vars[-1].keys()
         self.new_vars[-1] = {}
         return r
     def compile(self):
         _global = {}
-        for k in self.imports: _global[k] = 'r'
-        for k in self.exports: _global[k] = 'w'
-        for k in self.intrinsics: _global[k] = 'r'
+        for k in self.intrinsics: _global[k] = 'xr'
         self.scope = [_global, dict(_global)]
         self.new_vars = [{}]
         self.scope_prop = ['c']
         src = self._program(self.root)
-        members = ""
-        members += "".join(map(lambda x: "extern pa_value* " + x + ";", self.imports))
-        members += "".join(map(lambda x: "pa_value* " + x + ";", self.exports))
-        return "%s\n%s;pa_value*PA_INIT(){pa_value* __ret__=nil;%s;return __ret__;};%s" % (CppCompiler.HEADER, members, src, CppCompiler.ENTRYPOINT if not self.is_library else "")
+        src_def_export = ""
+        for x in self.exports:
+            src_def_export += "pa_value*" + x[1] + ";"
+        src_export = "TYPE_DICT("
+        src_export += ",".join(map(lambda x: "TYPE_DICT_KV(TYPE_STRING(\"" + x[0] + "\")," + x[1] + ")", self.exports))  
+        src_export += ")"
+        return "%s\nextern \"C\" pa_value*PA_INIT(){INTRINSICS();%s;%s;return %s;};%s" % (CppCompiler.HEADER, src_def_export, src, src_export, CppCompiler.ENTRYPOINT if not self.is_library else "")
     # Rules
     def _program(self, ast):
         if ast[0] == 'program':
             src = ""
             for stat in ast[1]:
-                src += self._stat(stat)
+                src += self._stat(stat, topmost=True)
             return src
         else:
             raise Exception("Semantic error")
-    def _stat(self, ast):
+    def _stat(self, ast, topmost=False):
         if ast[0] == 'stat':
             stat_name = ast[1][0]
             stat_fn = {
@@ -69,9 +79,45 @@ class CppCompiler:
                 'stat_break': self._stat_break,
                 'stat_continue': self._stat_continue,
                 'stat_if': self._stat_if,
-                'stat_ret': self._stat_ret
+                'stat_ret': self._stat_ret,
+                'stat_import': self._stat_import,
+                'stat_export': self._stat_export
             }[stat_name]
+            if stat_name in ['stat_export', 'stat_import'] and topmost == False:
+                raise Exception("import/exports can be used only in the global scope.")
             return stat_fn(ast[1]) + ';'
+        else:
+            raise Exception("Semantic error")
+    def _stat_import(self, ast):
+        if ast[0] == 'stat_import':
+            src = ""
+            for i in ast[1]:
+                lib_name = i[0][1]
+                if len(i) == 2:
+                    name = i[1][1] 
+                else:
+                    name = lib_name
+
+                if name in self.scope[-1] and 'w' not in self.scope[-1][name]:
+                    raise Exception("Assigning a library at a read-only variable.")
+                if name not in self.scope[-1]:
+                    src += "pa_value*" + name + ";"
+                src += name + "=PA_IMPORT(\"" + lib_name + "\");"
+                self.import_(lib_name, name)
+            return src
+        else:
+            raise Exception("Semantic error")
+    def _stat_export(self, ast):
+        if ast[0] == 'stat_export':
+            src = ""
+            for i in ast[1]:
+                my_name = i[0][1]
+                if len(i) == 2:
+                    name = i[1][1] 
+                else:
+                    name = my_name
+                self.export_(name, my_name)
+            return src
         else:
             raise Exception("Semantic error")
     def _stat_assign(self, ast):
@@ -101,9 +147,9 @@ class CppCompiler:
                 self.enter_func()
                 for i, x in enumerate(args):
                     var_name = x[1][0][1]
-                    self.scope[-1][var_name] = 'w'
+                    self.define(var_name)
                     if len(x[1]) == 1:
-                        df = "nil"
+                        df = "TYPE_NIL()"
                     else:
                         df = self._expr(x[1][1])
                     src += "pa_value*" + var_name + "=PARAM(args,kwargs," + str(i) + ",\"" + var_name + "\"," + df + ");"
@@ -130,7 +176,7 @@ class CppCompiler:
             ident = ast[1][0]
             val = ast[1][1]
             stats = ast[1][2]
-            self.scope[-1][ident[1]] = 'r' # make known. index var
+            self.define(ident[1], read_only=True) # make known. index var
             src += "{"
             src += "pa_value *__for_ref__=" + self._expr(val) + ";"
             src += "pa_value *__for_ref_len__=OP_LEN(__for_ref__);"
@@ -187,6 +233,8 @@ class CppCompiler:
     def _expr_literal(self, ast):
         if ast[0] == 'expr_rvalue':
             return self._expr_rvalue(ast[1])
+        elif ast[0] == 'NIL':
+            return 'TYPE_NIL()'
         elif ast[0] == 'INTEGER':
             return "TYPE_INT(" + str(ast[1]) + ")"
         elif ast[0] == 'REAL':
@@ -206,9 +254,9 @@ class CppCompiler:
             self.enter_func()
             for i, x in enumerate(args):
                 var_name = x[1][0][1]
-                self.scope[-1][var_name] = 'w'
+                self.define(var_name)
                 if len(x[1]) == 1:
-                    df = "nil"
+                    df = "TYPE_NIL()"
                 else:
                     df = self._expr(x[1][1])
                 src += "pa_value*" + var_name + "=PARAM(args,kwargs," + str(i) + ",\"" + var_name + "\"," + df + ");"
@@ -270,7 +318,7 @@ class CppCompiler:
         if len(ast) == 1:
             var_name = ast[0][1] # IDENT
             if var_name in self.scope[-1]:
-                if self.scope[-1][var_name] == 'w':
+                if 'w' in self.scope[-1][var_name]:
                     return var_name
                 else:
                     raise Exception("Variable is read-only in the scope: " + str(var_name))
@@ -284,9 +332,9 @@ class CppCompiler:
                 if ast[i][0] == 'IDENT':
                     src += self._expr_lvalue([ast[i]])
                 elif ast[i][0] == 'expr_lvalue_item':
-                    src = "OP_ITEM(" + src + "," + self._expr(ast[i][1]) + ")"
+                    src = "OP_SETITEM(" + src + "," + self._expr(ast[i][1]) + ")"
                 elif ast[i][0] == 'expr_lvalue_attr':
-                    src = "OP_ATTR(" + src + "," + self._expr(ast[i][1]) + ")"
+                    src = "OP_SETATTR(" + src + ",\"" + ast[i][1][1] + "\")"
                 else:
                     raise Exception("Semantic error")
                 i += 1
@@ -307,9 +355,9 @@ class CppCompiler:
                 if ast[i][0] == 'IDENT':
                     src += self._expr_rvalue([ast[i]])
                 elif ast[i][0] == 'expr_rvalue_item':
-                    src = "OP_ITEM(" + src + "," + self._expr(ast[i][1]) + ")"
+                    src = "OP_GETITEM(" + src + "," + self._expr(ast[i][1]) + ")"
                 elif ast[i][0] == 'expr_rvalue_attr':
-                    src = "OP_ATTR(" + src + "," + self._expr(ast[i][1]) + ")"
+                    src = "OP_GETATTR(" + src + ",\"" + ast[i][1][1] + "\")"
                 elif ast[i][0] == 'expr_rvalue_call':
                     fargs = ast[i][1]
                     __args = filter(lambda x: x[0] == 'expr', fargs) 

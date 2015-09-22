@@ -10,10 +10,14 @@ NEWLINE = Suppress(";")
 
 COMMENT = Literal('#') + restOfLine
 
+KW_IMPORT = Suppress("import")
+KW_EXPORT = Suppress("export")
+
 # Literals
 #FIXME Ident shouldn't be matched if it's a reserved keyword
 IDENT = Regex(r'[a-zA-Z_][a-zA-Z0-9_]*')\
         .setParseAction(lambda t: ["IDENT", t[0]])
+NIL     = Literal("nil").setParseAction(lambda t: ["NIL", t[0]])
 INTEGER = Combine(Optional(oneOf("+ -")) + Word(nums))\
     .setName("integer")\
     .setParseAction(lambda t: ["INTEGER", int(t[0])])
@@ -48,7 +52,7 @@ expr_lvalue = Group(Group(IDENT) + ZeroOrMore(Group(expr_lvalue_item|expr_lvalue
 expr_rvalue_item = Group(LBRACK + expr + RBRACK)\
         .setParseAction(lambda t: ["expr_rvalue_item", t[0]])
 expr_rvalue_attr = Group(DOT + IDENT)\
-        .setParseAction(lambda t: ["expr_rvalue_item", t[0]])
+        .setParseAction(lambda t: ["expr_rvalue_attr", t[0]])
 
 expr_func_kwarg = Group(Group(IDENT) + OP_ASSIGN + Group(expr)).setParseAction(lambda t: ['expr_func_kwarg', t[0]])
 expr_rvalue_call = (LPAREN + Group(Optional(delimitedList(Group(expr_func_kwarg|expr)))) + RPAREN)\
@@ -66,7 +70,7 @@ def_func_args = LPAREN + Optional(delimitedList(Group(def_func_arg))) + RPAREN
 def_func = Group(Group(expr_lvalue) + Group(def_func_args))\
         .setParseAction(lambda t: ["def_func", t[0]])
 
-expr_literal = Group(REAL | INTEGER | STRING | LIST | DICT | FUNC | VAR | expr_rvalue)
+expr_literal = Group(NIL | REAL | INTEGER | STRING | LIST | DICT | FUNC | VAR | expr_rvalue)
 
 
 LIST << Group(LBRACK + Optional(delimitedList(Group(expr))) + RBRACK)\
@@ -101,7 +105,9 @@ stat_ret << Group(OP_ASSIGN + expr).setParseAction(lambda t: ["stat_ret", t[0]])
 stat_expr = Group(expr).setParseAction(lambda t: ["stat_expr", t[0]])
 stat_break = Group(Suppress("break")).setParseAction(lambda t: ["stat_break"])
 stat_continue = Group(Suppress("continue")).setParseAction(lambda t: ["stat_continue"])
-stat << Group((stat_if | stat_for | stat_while | stat_break | stat_continue | stat_assign | stat_ret | stat_expr) + Optional(NEWLINE)).setParseAction(lambda t: ["stat", t[0]])
+stat_import = Group(Suppress("import") + Group(Group(IDENT) + Optional(Group(Suppress("as") + IDENT)))).setParseAction(lambda t: ["stat_import", t[0]])
+stat_export = Group(Suppress("export") + Group(Group(IDENT) + Optional(Group(Suppress("as") + IDENT)))).setParseAction(lambda t: ["stat_export", t[0]])
+stat << Group((stat_import | stat_export | stat_if | stat_for | stat_while | stat_break | stat_continue | stat_assign | stat_ret | stat_expr) + Optional(NEWLINE)).setParseAction(lambda t: ["stat", t[0]])
 
 # Program
 program = ZeroOrMore(Group(stat)).setParseAction(lambda t: ["program", t])

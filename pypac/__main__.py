@@ -4,7 +4,7 @@ from optparse import OptionParser
 import parser, compiler
 
 CXX = os.environ.get("CXX", "c++")
-CXXFLAGS = os.environ.get("CXXFLAGS", "-O3 -std=c++11")
+CXXFLAGS = os.environ.get("CXXFLAGS", "-O3 -g -std=c++11 -ldl ")
 PA_HOME = os.path.abspath(os.environ.get("PA_HOME", "."))
 
 pp = pprint.PrettyPrinter(indent=2,width=80)
@@ -25,6 +25,7 @@ if len(args) == 0:
 source = "\n".join(map(lambda x: open(x).read(), args))
 
 ast = parser.parse(source)
+if options.verbose: print ast
 
 cxx = compiler.compile(ast, is_library=options.library)
 
@@ -37,10 +38,10 @@ else:
     CXXFLAGS += " -o " + options.output + " "
     CXXFLAGS += " -I " + PA_HOME + "/include/ "
     if options.library:
-        CXXFLAGS += " -c -fPIC -shared -Wl,-soname," + options.output + " "
+        CXXFLAGS += " -fPIC -shared "
     if options.static:
         CXXFLAGS += " -static-libgcc -static-libstdc++ "
-    cmdline = (CXX + " "  + CXXFLAGS + " " + f.name).split()
+    cmdline = (CXX + " " + f.name + " "  + CXXFLAGS).split()
     if options.verbose: print " ".join(cmdline)
     p = subprocess.Popen(cmdline, stderr=subprocess.PIPE)
     ret = p.wait()

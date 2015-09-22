@@ -12,10 +12,12 @@
 #include <map>
 #include <string>
 #include <functional>
+#include <dlfcn.h>
 
 #define PV2STR(x) (static_cast<string*>((x)->value.ptr))
 #define PV2LIST(x) (static_cast<list<pa_value*>*>((x)->value.ptr))
 #define PV2MAP(x) (static_cast<map<string,pa_value*>*>((x)->value.ptr))
+#define inline
 
 using namespace std;
 
@@ -32,6 +34,10 @@ enum pa_type {
     pa_object
 }; 
 
+struct pa_value;
+class pa_object_data;
+class pa_class_data;
+
 struct pa_value {
     union {
         int8_t i8;
@@ -46,25 +52,57 @@ struct pa_value {
         float f32;
         double f64;
         void* ptr; 
+        //list<pa_value*>* list;
+        //map<string,pa_value*>* dict;
         function<pa_value*(pa_value*,pa_value*)>* func;
+        pa_class_data* cls;
+        pa_object_data* obj;
     } value;
     enum pa_type type;
 };
 
-list<pa_value*> pool;
+class pa_class_data {
+    private:
+        map<string, pa_value*> members;
+        map<string, pa_value*> operators;
+    public:
+        void set_member(string name, pa_value* value) { this->members[name] = value; }
+        pa_value* get_member(string name) { return this->members[name]; }
+        void set_operator(string name, pa_value* value) { this->operators[name] = value; }
+        pa_value* get_operator(string name) { return this->operators[name]; }
+};
 
-// Intrinsics
-pa_value *nil; 
-pa_value *print; 
-pa_value *range;
-pa_value *input;
+class pa_object_data {
+    private:
+        pa_class_data* _class;
+        map<string, pa_value*> members;
+    public:
+        pa_object_data() {}
+        pa_object_data(pa_class_data* _class) { this->_class = _class; }
+        pa_class_data* get_class() { return this->_class; }
+        void set_member(string name, pa_value* value) { this->members[name] = value; }
+        pa_value* get_member(string name) { 
+            if(this->members[name]){
+                return this->members[name]; 
+            } else if(this->_class && this->_class->get_member(name)) {
+                return this->_class->get_member(name);
+            } else {
+                return NULL;
+            }
+        }
+};
+
+list<pa_value*> pool;
 
 // Types
 
 inline pa_value* TYPE_NIL() {
-    pa_value *r = new pa_value;
-    r->type = pa_nil;
-    pool.push_back(r);
+    static pa_value *r = NULL;
+    if(!r) { 
+        r = new pa_value;
+        r->type = pa_nil;
+        pool.push_back(r);
+    }
     return r;
 }
 
@@ -155,11 +193,35 @@ inline pa_value* TYPE_FUNC(function<pa_value*(pa_value*,pa_value*)> f) {
 
 }
 
+inline pa_value* TYPE_CLASS() {
+    pa_value *r = new pa_value;
+    r->value.cls = new pa_class_data;
+    r->type = pa_class;
+    pool.push_back(r);
+    return r;
+}
+
+inline pa_value* TYPE_OBJECT() {
+    pa_value *r = new pa_value;
+    r->value.obj = new pa_object_data;
+    r->type = pa_object;
+    pool.push_back(r);
+    return r;
+}
+inline pa_value* TYPE_OBJECT(pa_class_data* _class) {
+    pa_value *r = new pa_value;
+    r->value.obj = new pa_object_data(_class);
+    r->type = pa_object;
+    pool.push_back(r);
+    return r;
+}
+
 // Function invoke
 
 inline pa_value* FUNC_CALL(pa_value* func, pa_value* args, pa_value* kwargs) {
-
+    
     if(func->type != pa_func) {
+        printf("func_type: %d\n", func->type);
         printf("Runtime Error: calling a non-function value.\n");
         exit(1);
     } 
@@ -189,9 +251,10 @@ pa_value* PARAM(pa_value *args, pa_value *kwargs, const size_t nth, const string
 
 // Operators
 
-inline pa_value* OP_ITEM(pa_value* a, pa_value* b) {
+inline pa_value* OP_GETITEM(pa_value* a, pa_value* b) {
     list<pa_value*>* l;
     list<pa_value*>::iterator it;
+    map<string,pa_value*>* m;
     string* s;
 
     switch(a->type) {
@@ -222,11 +285,37 @@ inline pa_value* OP_ITEM(pa_value* a, pa_value* b) {
                 default:
                    goto type_mismatch;
             }
+        case pa_dict:
+            m = PV2MAP(a);
+            return (*m)[HASH(b)];
         default:
             goto type_mismatch;
     }
 type_mismatch:
     printf("Runtime Error: Type mismatch([]).\n");
+    exit(1);
+}
+
+inline pa_value* OP_GETATTR(pa_value* a, string b) {
+    pa_value* ret;
+    switch(a->type) {
+        case pa_object:
+            ret = a->value.obj->get_member(b);
+            if(!ret) {
+                ret = a->value.obj->get_class()->get_operator("getattr");
+                if(ret) {
+                    ret = FUNC_CALL(ret, TYPE_LIST(a, TYPE_STRING(b)), TYPE_DICT());
+                } else {
+                    printf("Runtime Error: no such attribute/method.\n");
+                    exit(1); 
+                }
+            }
+            return ret;
+        default:
+            goto type_mismatch;
+    }
+type_mismatch:
+    printf("Runtime Error: Type mismatch(.).\n");
     exit(1);
 }
 
@@ -529,64 +618,102 @@ type_mismatch:
 
 // Utilities
 
+inline pa_value* PA_IMPORT(string name) {
+
+    //TODO 
+    string file_name = "./" + name + ".so";
+
+    void* handle = dlopen(file_name.c_str(), RTLD_NOW | RTLD_GLOBAL);
+
+    if(handle) {
+        pa_value*(*mod_init)() = (pa_value*(*)()) dlsym(handle, "PA_INIT");
+
+        pa_value* mod = mod_init();
+
+        pa_value* mod_class = TYPE_CLASS();
+        mod_class->value.cls->set_operator("getattr", TYPE_FUNC([=](pa_value* args, pa_value* kwargs) -> pa_value* {
+            pa_value *_this = PARAM(args, kwargs, 0, "", TYPE_NIL());
+            pa_value *attr_name = PARAM(args, kwargs, 1, "", TYPE_NIL());
+            pa_value* attr = OP_GETITEM(mod, attr_name); 
+            if(attr){ 
+                return attr; 
+            } else {
+                printf("Runtime Error: no such name in the module: %s.%s\n", name.c_str(), PV2STR(attr_name)->c_str());
+                exit(1);
+            }
+        }));
+
+        return TYPE_OBJECT(mod_class->value.cls);
+    } else {
+        printf("Runtime Error: no such library. %s\n", name.c_str());
+        printf("%s\n", dlerror());
+        exit(1);
+    }
+}
 
 inline void PA_ENTER(int argc, char** argv, char** env) {
-    nil = TYPE_NIL();
-    range = TYPE_FUNC([](pa_value* args, pa_value* kwargs) -> pa_value* {
-        pa_value *start = PARAM(args, kwargs, 0, "start", nil);
-        pa_value *end = PARAM(args, kwargs, 1, "end", nil);
-        pa_value *step = PARAM(args, kwargs, 2, "step", TYPE_INT(1));
-        
-        pa_value *l = TYPE_LIST();
-        if(start->type == pa_integer && end->type == pa_integer && step->type == pa_integer) { 
-            for(int64_t i = start->value.i64; i <= end->value.i64; i+=step->value.i64) {
-                pa_value *index = TYPE_INT(i);
-                PV2LIST(l)->push_back(index);
-            }
-            return l;
-        } else {
-            printf("Runtime Error: Type mismatch(range).\n");
-            exit(1);
-        }
-    });
-    print = TYPE_FUNC([](pa_value* args, pa_value* kwargs) -> pa_value* {
-        list<pa_value*> *_args = PV2LIST(args);
-        list<pa_value*>::iterator it;
-        for(it = _args->begin(); it != _args->end(); ++it) {
-            pa_value* msg = *it;
-            switch(msg->type) {
-                case pa_nil:
-                    printf("nil");
-                    break;
-                case pa_integer:
-                    printf("%lld", (long long int)msg->value.i64);
-                    break;
-                case pa_float:
-                    printf("%lf", (double)msg->value.f64);
-                    break;
-                case pa_string:
-                    printf("%s", PV2STR(msg)->c_str());
-                    break;
-                default:
-                    printf("Runtime Error: print() cannot print the value. (Type:%d)\n", msg->type);
-                    exit(1);
-                    break;
-            }
-        }
-        return nil;
-    });
-    input = TYPE_FUNC([](pa_value* args, pa_value* kwargs) -> pa_value* {
-        long long int N;
-        register int t = scanf("%lld", &N);
-        pa_value* n = TYPE_INT(N);
-        return n;
-    });
+    //TODO 
 }
 
 inline int PA_LEAVE(pa_value *ret) {
     //TODO Return value
     return 0;
 }
+
+// Intrinsics
+#define INTRINSICS() \
+pa_value *print; \
+pa_value *range; \
+pa_value *input; \
+range = TYPE_FUNC([](pa_value* args, pa_value* kwargs) -> pa_value* { \
+        pa_value *start = PARAM(args, kwargs, 0, "start", TYPE_NIL()); \
+        pa_value *end = PARAM(args, kwargs, 1, "end", TYPE_NIL()); \
+        pa_value *step = PARAM(args, kwargs, 2, "step", TYPE_INT(1)); \
+        \
+        pa_value *l = TYPE_LIST(); \
+        if(start->type == pa_integer && end->type == pa_integer && step->type == pa_integer) {  \
+            for(int64_t i = start->value.i64; i <= end->value.i64; i+=step->value.i64) { \
+                pa_value *index = TYPE_INT(i); \
+                PV2LIST(l)->push_back(index); \
+            } \
+            return l; \
+        } else { \
+            printf("Runtime Error: Type mismatch(range).\n"); \
+            exit(1); \
+        } \
+    }); \
+    print = TYPE_FUNC([](pa_value* args, pa_value* kwargs) -> pa_value* { \
+        list<pa_value*> *_args = PV2LIST(args); \
+        list<pa_value*>::iterator it; \
+        for(it = _args->begin(); it != _args->end(); ++it) { \
+            pa_value* msg = *it; \
+            switch(msg->type) { \
+                case pa_nil: \
+                    printf("nil"); \
+                    break; \
+                case pa_integer: \
+                    printf("%lld", (long long int)msg->value.i64); \
+                    break; \
+                case pa_float: \
+                    printf("%lf", (double)msg->value.f64); \
+                    break; \
+                case pa_string: \
+                    printf("%s", PV2STR(msg)->c_str()); \
+                    break; \
+                default: \
+                    printf("Runtime Error: print() cannot print the value. (Type:%d)\n", msg->type); \
+                    exit(1); \
+                    break; \
+            } \
+        } \
+        return TYPE_NIL(); \
+    }); \
+    input = TYPE_FUNC([](pa_value* args, pa_value* kwargs) -> pa_value* { \
+        long long int N; \
+        register int t = scanf("%lld", &N); \
+        pa_value* n = TYPE_INT(N); \
+        return n; \
+    });
 
 
 #endif
