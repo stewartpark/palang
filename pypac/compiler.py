@@ -55,11 +55,11 @@ class CppCompiler:
         src = self._program(self.root)
         src_def_export = ""
         for x in self.exports:
-            src_def_export += "pa_value*" + x[1] + ";"
-        src_export = "TYPE_DICT("
-        src_export += ",".join(map(lambda x: "TYPE_DICT_KV(TYPE_STRING(\"" + x[0] + "\")," + x[1] + ")", self.exports))  
+            src_def_export += "pa_value_t*" + x[1] + ";"
+        src_export = "pa_new_dictionary("
+        src_export += ",".join(map(lambda x: "pa_new_dictionary_kv(pa_new_string(\"" + x[0] + "\")," + x[1] + ")", self.exports))  
         src_export += ")"
-        return "%s\nextern \"C\" pa_value*PA_INIT(){INTRINSICS();%s;%s;return %s;};%s" % (CppCompiler.HEADER, src_def_export, src, src_export, CppCompiler.ENTRYPOINT if not self.is_library else "")
+        return "%s\nextern \"C\" pa_value_t*PA_INIT(){INTRINSICS();%s;%s;return %s;};%s" % (CppCompiler.HEADER, src_def_export, src, src_export, CppCompiler.ENTRYPOINT if not self.is_library else "")
     # Rules
     def _program(self, ast):
         if ast[0] == 'program':
@@ -102,8 +102,8 @@ class CppCompiler:
                 if name in self.scope[-1] and 'w' not in self.scope[-1][name]:
                     raise Exception("Assigning a library at a read-only variable.")
                 if name not in self.scope[-1]:
-                    src += "pa_value*" + name + ";"
-                src += name + "=PA_IMPORT(\"" + lib_name + "\");"
+                    src += "pa_value_t*" + name + ";"
+                src += name + "=pa_import(\"" + lib_name + "\");"
                 self.import_(lib_name, name)
             return src
         else:
@@ -129,9 +129,9 @@ class CppCompiler:
                 lv = self._expr_lvalue(t[1][1])
                 def_vars = ""
                 for x in self.get_reset_new_vars():
-                    def_vars += "pa_value *" + x + ";"
+                    def_vars += "pa_value_t *" + x + ";"
                 src += def_vars + lv + '='
-                src += "([=]()->pa_value*{" #FUNC 
+                src += "([=]()->pa_value_t*{" #FUNC 
                 self.enter_func()
                 for x in ast[1][1]:
                     src += self._stat(x)
@@ -143,21 +143,21 @@ class CppCompiler:
                 lv = self._expr_lvalue(t[1][0][1])
                 def_vars = ""
                 for x in self.get_reset_new_vars():
-                    def_vars += "pa_value *" + x + ";"
+                    def_vars += "pa_value_t *" + x + ";"
                 args = t[1][1]
                 self.enter_func()
                 for i, x in enumerate(args):
                     var_name = x[1][0][1]
                     if len(x[1]) == 1:
-                        df = "TYPE_NIL()"
+                        df = "pa_new_nil()"
                     else:
                         df = self._expr(x[1][1])
-                    src += "pa_value*" + var_name + "=PARAM(args,kwargs," + str(i) + ",\"" + var_name + "\"," + df + ");"
+                    src += "pa_value_t*" + var_name + "=pa_get_argument(args,kwargs," + str(i) + ",\"" + var_name + "\"," + df + ");"
                     self.define(var_name, need_to_be_declared=False)
                 for s in ast[1][1]:
                     src += self._stat(s)
                 self.leave_func()
-                return def_vars + lv + "=TYPE_FUNC([=](pa_value *args, pa_value *kwargs)->pa_value* {" + src + "})" #FUNC
+                return def_vars + lv + "=pa_new_function([=](pa_value_t *args, pa_value_t *kwargs)->pa_value_t* {" + src + "})" #FUNC
             else:
                 raise Exception("Semantic error")
         else:
@@ -179,11 +179,11 @@ class CppCompiler:
             stats = ast[1][2]
             self.define(ident[1], read_only=True, need_to_be_declared=False) # make known. index var
             src += "{"
-            src += "pa_value *__for_ref__=" + self._expr(val) + ";"
-            src += "pa_value *__for_ref_len__=OP_LEN(__for_ref__);"
-            src += "pa_value *" + ident[1] + ";"
+            src += "pa_value_t *__for_ref__=" + self._expr(val) + ";"
+            src += "pa_value_t *__for_ref_len__=pa_operator_length(__for_ref__);"
+            src += "pa_value_t *" + ident[1] + ";"
             src += "for(int64_t __for_index__ = 0; __for_index__ < __for_ref_len__->value.i64; __for_index__++){"
-            src += ident[1] + "=OP_GETITEM(__for_ref__, TYPE_INT(__for_index__));"
+            src += ident[1] + "=pa_operator_getitem(__for_ref__, pa_new_integer(__for_index__));"
             src += "".join(map(self._stat, stats))
             src += "}}"
             self.leave_loop()
@@ -196,7 +196,7 @@ class CppCompiler:
             src = ""
             val = ast[1][0]
             stats = ast[1][1]
-            src += "while(LEXPR(" + self._expr(val) + ")){"
+            src += "while(pa_evaluate_into_boolean(" + self._expr(val) + ")){"
             src += "".join(map(self._stat, stats))
             src += "}"
             self.leave_loop()
@@ -219,9 +219,9 @@ class CppCompiler:
             meat = ast[1]
             for i, x in enumerate(meat):
                 if i == 0:
-                    src += "if(LEXPR(" + self._expr(x[0]) + ")){" + ("".join(map(self._stat, x[1]))) + "}"
+                    src += "if(pa_evaluate_into_boolean(" + self._expr(x[0]) + ")){" + ("".join(map(self._stat, x[1]))) + "}"
                 elif len(x) == 2:
-                    src += "else if(LEXPR(" + self._expr(x[0]) + ")){" + ("".join(map(self._stat, x[1]))) + "}"
+                    src += "else if(pa_evaluate_into_boolean(" + self._expr(x[0]) + ")){" + ("".join(map(self._stat, x[1]))) + "}"
                 else:
                     src += "else{" + ("".join(map(self._stat, x[0]))) + "}"
             return src
@@ -235,20 +235,20 @@ class CppCompiler:
         if ast[0] == 'expr_rvalue':
             return self._expr_rvalue(ast[1])
         elif ast[0] == 'NIL':
-            return 'TYPE_NIL()'
+            return 'pa_new_nil()'
         elif ast[0] == 'INTEGER':
-            return "TYPE_INT(" + str(ast[1]) + ")"
+            return "pa_new_integer(" + str(ast[1]) + ")"
         elif ast[0] == 'REAL':
-            return "TYPE_REAL(" + str(ast[1]) + ")"
+            return "pa_new_real(" + str(ast[1]) + ")"
         elif ast[0] == 'STRING':
-            return "TYPE_STRING(\"" + ast[1] + "\")"
+            return "pa_new_string(\"" + ast[1] + "\")"
         elif ast[0] == 'VAR':
             src = ""
             self.enter_func()
             for s in ast[1]:
                 src += self._stat(s)
             self.leave_func()
-            return "([=]()->pa_value*{" + src + "})()" #FUNC
+            return "([=]()->pa_value_t*{" + src + "})()" #FUNC
         elif ast[0] == 'FUNC':
             src = ""
             args = ast[1][0]
@@ -256,17 +256,17 @@ class CppCompiler:
             for i, x in enumerate(args):
                 var_name = x[1][0][1]
                 if len(x[1]) == 1:
-                    df = "TYPE_NIL()"
+                    df = "pa_new_nil()"
                 else:
                     df = self._expr(x[1][1])
-                src += "pa_value*" + var_name + "=PARAM(args,kwargs," + str(i) + ",\"" + var_name + "\"," + df + ");"
+                src += "pa_value_t*" + var_name + "=pa_get_argument(args,kwargs," + str(i) + ",\"" + var_name + "\"," + df + ");"
                 self.define(var_name, need_to_be_declared=False)
             for s in ast[1][1]:
                 src += self._stat(s)
             self.leave_func()
-            return "TYPE_FUNC([=](pa_value *args, pa_value *kwargs)->pa_value* {" + src + "})" #FUNC
+            return "pa_new_function([=](pa_value_t *args, pa_value_t *kwargs)->pa_value_t* {" + src + "})" #FUNC
         elif ast[0] == 'LIST':
-            return "TYPE_LIST(" + ",".join(map(self._expr, ast[1])) + ")"
+            return "pa_new_list(" + ",".join(map(self._expr, ast[1])) + ")"
         elif ast[0] == 'DICT':
             pass
         else:
@@ -278,29 +278,29 @@ class CppCompiler:
             return self._expr_literal(ast[0])
         elif len(ast) == 2:
             if ast[0] == 'not':
-                return "OP_NOT(" + self._expr_literal(ast[1]) + ")"
+                return "pa_operator_not(" + self._expr_literal(ast[1]) + ")"
             elif type(ast[1]) == str and ast[1] in '&!?':
                 raise Exception("Not implemented")
             else:
                 raise Exception("Semantic error")
         else:
             opf = {
-                '+': 'OP_ADD',
-                '-': 'OP_SUB',
-                '*': 'OP_MUL',
-                '/': 'OP_DIV',
-                'mod': 'OP_MOD',
-                '^': 'OP_POW',
-                '==': 'OP_EQ',
-                '!=': 'OP_NEQ',
-                '>': 'OP_GT',
-                '>=': 'OP_GTE',
-                '<': 'OP_LT',
-                '<=': 'OP_LTE',
-                '->': 'OP_RIGHT',
-                '<-': 'OP_LEFT',
-                'and': 'OP_AND',
-                'or': 'OP_OR'
+                '+': 'pa_operator_add',
+                '-': 'pa_operator_subtract',
+                '*': 'pa_operator_multiply',
+                '/': 'pa_operator_divide',
+                'mod': 'pa_operator_modulo',
+                '^': 'pa_operator_power',
+                '==': 'pa_operator_eq',
+                '!=': 'pa_operator_neq',
+                '>': 'pa_operator_gt',
+                '>=': 'pa_operator_gte',
+                '<': 'pa_operator_lt',
+                '<=': 'pa_operator_lte',
+                '->': 'pa_operator_right',
+                '<-': 'pa_operator_left',
+                'and': 'pa_operator_and',
+                'or': 'pa_operator_or'
             }
             src = self._expr_literal(ast[0])
             i = 1
@@ -333,9 +333,9 @@ class CppCompiler:
                 if ast[i][0] == 'IDENT':
                     src += self._expr_lvalue([ast[i]])
                 elif ast[i][0] == 'expr_lvalue_item':
-                    src = "OP_SETITEM(" + src + "," + self._expr(ast[i][1]) + ")"
+                    src = "pa_operator_setitem(" + src + "," + self._expr(ast[i][1]) + ")"
                 elif ast[i][0] == 'expr_lvalue_attr':
-                    src = "OP_SETATTR(" + src + ",\"" + ast[i][1][1] + "\")"
+                    src = "pa_operator_setattr(" + src + ",\"" + ast[i][1][1] + "\")"
                 else:
                     raise Exception("Semantic error")
                 i += 1
@@ -371,9 +371,9 @@ class CppCompiler:
                     # kwargs
                     s_kwargs = ""
                     for x in __kwargs:
-                        s_kwargs += "TYPE_DICT_KV(TYPE_STRING(\"" + x[1][0][1] + "\")," + self._expr(x[1][1]) + "),"
+                        s_kwargs += "pa_new_dictionary_kv(pa_new_string(\"" + x[1][0][1] + "\")," + self._expr(x[1][1]) + "),"
                     s_kwargs = s_kwargs[:-1]
-                    src ="FUNC_CALL(" + src + ",TYPE_LIST(" + s_args + "),TYPE_DICT(" + s_kwargs + "))"
+                    src ="pa_function_call(" + src + ",pa_new_list(" + s_args + "),pa_new_dictionary(" + s_kwargs + "))"
                 else:
                     raise Exception("Semantic error")
                 i += 1
