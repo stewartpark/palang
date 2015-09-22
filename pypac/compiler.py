@@ -97,7 +97,7 @@ class CppCompiler:
                 if len(i) == 2:
                     name = i[1][1] 
                 else:
-                    name = lib_name
+                    name = lib_name.split('.')[-1]
 
                 if name in self.scope[-1] and 'w' not in self.scope[-1][name]:
                     raise Exception("Assigning a library at a read-only variable.")
@@ -356,9 +356,9 @@ class CppCompiler:
                 if ast[i][0] == 'IDENT':
                     src += self._expr_rvalue([ast[i]])
                 elif ast[i][0] == 'expr_rvalue_item':
-                    src = "OP_GETITEM(" + src + "," + self._expr(ast[i][1]) + ")"
+                    src = "pa_operator_getitem(" + src + "," + self._expr(ast[i][1]) + ")"
                 elif ast[i][0] == 'expr_rvalue_attr':
-                    src = "OP_GETATTR(" + src + ",\"" + ast[i][1][1] + "\")"
+                    src = "pa_operator_getattr(" + src + ",\"" + ast[i][1][1] + "\")"
                 elif ast[i][0] == 'expr_rvalue_call':
                     fargs = ast[i][1]
                     __args = filter(lambda x: x[0] == 'expr', fargs) 

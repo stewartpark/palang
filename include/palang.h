@@ -12,7 +12,9 @@
 #include <map>
 #include <string>
 #include <functional>
+#include <algorithm>
 #include <dlfcn.h>
+#include <unistd.h>
 
 #define PV2STR(x) (static_cast<string*>((x)->value.ptr))
 #define PV2LIST(x) (static_cast<list<pa_value_t*>*>((x)->value.ptr))
@@ -612,11 +614,24 @@ type_mismatch:
 // Utilities
 
 inline pa_value_t* pa_import(string name) {
+    replace(name.begin(), name.end(), '.', '/');
 
-    //TODO 
-    string file_name = "./" + name + ".so";
+    //TODO Make it functional on Windows, Mac as well.
+    string file_path;
+    string file_name = "/" + name + ".so";
+    string paths_to_search[] = {
+        ".",
+        string(getenv("PA_HOME")) + "/libs"
+    };
+    
+    for(unsigned i = 0; i <= 1; i++) {
+        file_path = paths_to_search[i] + file_name;
+        if(access(file_path.c_str(), F_OK) != -1) {
+            break;   
+        }
+    }
 
-    void* handle = dlopen(file_name.c_str(), RTLD_NOW | RTLD_GLOBAL);
+    void* handle = dlopen(file_path.c_str(), RTLD_NOW | RTLD_GLOBAL);
 
     if(handle) {
         pa_value_t*(*mod_init)() = (pa_value_t*(*)()) dlsym(handle, "PA_INIT");

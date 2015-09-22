@@ -22,17 +22,25 @@ if len(args) == 0:
     opt.print_help()
     exit(1)
 
-source = "\n".join(map(lambda x: open(x).read(), args))
+cpp_source = ""
+source = ""
+for x in args:
+    if x.split('.')[-1][0] == 'c':
+        cpp_source += open(x).read() + "\n"
+    elif x.split('.')[-1] == 'pa':
+        source += open(x).read() + "\n"
 
 ast = parser.parse(source)
 if options.verbose: print ast
 
-cxx = compiler.compile(ast, is_library=options.library)
+cxx = cpp_source
+if source:
+    cxx += compiler.compile(ast, is_library=options.library)
 
 if options.cpp:
     if options.output is None:
         try:
-            options.output = args[0].split('.')[1] + '.cc'
+            options.output = args[0].split('.')[0] + '.cc'
         except:
             options.output = args[0] + '.cc'
     open(options.output, 'w').write(cxx)
@@ -43,7 +51,7 @@ else:
     if options.output is None:
         if options.library:
             try:
-                options.output = args[0].split('.')[1] + '.so'
+                options.output = args[0].split('.')[0] + '.so'
             except:
                 options.output = args[0] + '.so'
         else:

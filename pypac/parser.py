@@ -10,13 +10,11 @@ NEWLINE = Suppress(";")
 
 COMMENT = Literal('#') + restOfLine
 
-KW_IMPORT = Suppress("import")
-KW_EXPORT = Suppress("export")
-
 # Literals
 #FIXME Ident shouldn't be matched if it's a reserved keyword
 IDENT = Regex(r'[a-zA-Z_][a-zA-Z0-9_]*')\
         .setParseAction(lambda t: ["IDENT", t[0]])
+PACKAGE_NAME = Combine(Word(alphas) + ZeroOrMore(Literal(".") + Word(alphas))).setParseAction(lambda t: ["PACKAGE_NAME", t[0]])
 NIL     = Literal("nil").setParseAction(lambda t: ["NIL", t[0]])
 INTEGER = Combine(Optional(oneOf("+ -")) + Word(nums))\
     .setName("integer")\
@@ -105,7 +103,7 @@ stat_ret << Group(OP_ASSIGN + expr).setParseAction(lambda t: ["stat_ret", t[0]])
 stat_expr = Group(expr).setParseAction(lambda t: ["stat_expr", t[0]])
 stat_break = Group(Suppress("break")).setParseAction(lambda t: ["stat_break"])
 stat_continue = Group(Suppress("continue")).setParseAction(lambda t: ["stat_continue"])
-stat_import = Group(Suppress("import") + Group(Group(IDENT) + Optional(Group(Suppress("as") + IDENT)))).setParseAction(lambda t: ["stat_import", t[0]])
+stat_import = Group(Suppress("import") + Group(Group(PACKAGE_NAME) + Optional(Group(Suppress("as") + IDENT)))).setParseAction(lambda t: ["stat_import", t[0]])
 stat_export = Group(Suppress("export") + Group(Group(IDENT) + Optional(Group(Suppress("as") + IDENT)))).setParseAction(lambda t: ["stat_export", t[0]])
 stat << Group((stat_import | stat_export | stat_if | stat_for | stat_while | stat_break | stat_continue | stat_assign | stat_ret | stat_expr) + Optional(NEWLINE)).setParseAction(lambda t: ["stat", t[0]])
 
