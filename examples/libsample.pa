@@ -1,0 +1,9 @@
+export test_func
+export test_var
+
+test_func(x) {
+    print("Hello from libsample! ", x, "\n")
+    = 2*x    
+}
+
+test_var = 100

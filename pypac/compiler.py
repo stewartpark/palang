@@ -29,9 +29,10 @@ class CppCompiler:
         self.scope_prop.pop()
     def leave_loop(self):
         self.leave_func()
-    def define(self, var_name, read_only=False):
+    def define(self, var_name, read_only=False, need_to_be_declared=True):
         self.scope[-1][var_name] = 'w' if not read_only else 'r' # Defined in the scope. writeable.
-        self.new_vars[-1][var_name] = True
+        if need_to_be_declared:
+            self.new_vars[-1][var_name] = True
     def import_(self, lib_name, my_name, is_static=False):
         self.scope[-1][my_name] = 'xr' # External, read-only.
         self.imports.append([lib_name, my_name, is_static])
@@ -176,13 +177,13 @@ class CppCompiler:
             ident = ast[1][0]
             val = ast[1][1]
             stats = ast[1][2]
-            self.define(ident[1], read_only=True) # make known. index var
+            self.define(ident[1], read_only=True, need_to_be_declared=False) # make known. index var
             src += "{"
             src += "pa_value *__for_ref__=" + self._expr(val) + ";"
             src += "pa_value *__for_ref_len__=OP_LEN(__for_ref__);"
             src += "pa_value *" + ident[1] + ";"
             src += "for(int64_t __for_index__ = 0; __for_index__ < __for_ref_len__->value.i64; __for_index__++){"
-            src += ident[1] + "=OP_ITEM(__for_ref__, TYPE_INT(__for_index__));"
+            src += ident[1] + "=OP_GETITEM(__for_ref__, TYPE_INT(__for_index__));"
             src += "".join(map(self._stat, stats))
             src += "}}"
             self.leave_loop()
