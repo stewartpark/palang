@@ -148,12 +148,12 @@ class CppCompiler:
                 self.enter_func()
                 for i, x in enumerate(args):
                     var_name = x[1][0][1]
-                    self.define(var_name)
                     if len(x[1]) == 1:
                         df = "TYPE_NIL()"
                     else:
                         df = self._expr(x[1][1])
                     src += "pa_value*" + var_name + "=PARAM(args,kwargs," + str(i) + ",\"" + var_name + "\"," + df + ");"
+                    self.define(var_name, need_to_be_declared=False)
                 for s in ast[1][1]:
                     src += self._stat(s)
                 self.leave_func()
@@ -255,12 +255,12 @@ class CppCompiler:
             self.enter_func()
             for i, x in enumerate(args):
                 var_name = x[1][0][1]
-                self.define(var_name)
                 if len(x[1]) == 1:
                     df = "TYPE_NIL()"
                 else:
                     df = self._expr(x[1][1])
                 src += "pa_value*" + var_name + "=PARAM(args,kwargs," + str(i) + ",\"" + var_name + "\"," + df + ");"
+                self.define(var_name, need_to_be_declared=False)
             for s in ast[1][1]:
                 src += self._stat(s)
             self.leave_func()

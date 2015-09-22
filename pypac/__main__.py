@@ -10,7 +10,7 @@ PA_HOME = os.path.abspath(os.environ.get("PA_HOME", "."))
 pp = pprint.PrettyPrinter(indent=2,width=80)
 
 opt = OptionParser()
-opt.add_option("-o", "--output", dest="output", default="a.out", help="output file", metavar="FILE")
+opt.add_option("-o", "--output", dest="output", default=None, help="output file", metavar="FILE")
 opt.add_option("-v", "--verbose", dest="verbose", default=False, help="verbose mode", action="store_true")
 opt.add_option("-c", "--cpp", dest="cpp", default=False, help="generate a C++ source code file instead of an executable.", action="store_true")
 opt.add_option("-s", "--static", dest="static", default=False, help="link C++ runtime libraries statically.", action="store_true")
@@ -30,11 +30,24 @@ if options.verbose: print ast
 cxx = compiler.compile(ast, is_library=options.library)
 
 if options.cpp:
+    if options.output is None:
+        try:
+            options.output = args[0].split('.')[1] + '.cc'
+        except:
+            options.output = args[0] + '.cc'
     open(options.output, 'w').write(cxx)
 else:
     f = NamedTemporaryFile(suffix='.cc', delete=False)
     f.write(cxx)
     f.close()
+    if options.output is None:
+        if options.library:
+            try:
+                options.output = args[0].split('.')[1] + '.so'
+            except:
+                options.output = args[0] + '.so'
+        else:
+            options.output = "a.out"
     CXXFLAGS += " -o " + options.output + " "
     CXXFLAGS += " -I " + PA_HOME + "/include/ "
     if options.library:
