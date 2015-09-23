@@ -1,0 +1,19 @@
+import tcp
+
+s = tcp.socket()
+
+if tcp.listen(s, "0.0.0.0", 3000) < 0 {
+    print("Failed to bind :3000\n")
+} else {
+    print("Listening on :3000\n")
+}
+
+while true {
+    c = tcp.accept(s)
+    tcp.read(c) # Just get the packet and ignore.
+    tcp.write(c, "HTTP/1.1 200 OK\nContent-Type: text/html\n\n")
+    tcp.write(c, "Hello world!<br /><b>test tcp http server\n")
+    tcp.close(c)
+}
+
+tcp.close(s)

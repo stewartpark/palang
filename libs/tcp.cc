@@ -9,7 +9,10 @@
 #include <unistd.h> /* for close() */
 
 pa_value_t* _socket(pa_value_t* args, pa_value_t* kwargs) {
-    return pa_new_integer(socket(PF_INET, SOCK_STREAM, IPPROTO_TCP));
+    int sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    int optval = 1;
+    setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
+    return pa_new_integer(sock);
 }
 
 pa_value_t* _connect(pa_value_t* args, pa_value_t* kwargs) {
@@ -52,11 +55,26 @@ pa_value_t* _write(pa_value_t* args, pa_value_t* kwargs) {
 }
 
 pa_value_t* _listen(pa_value_t* args, pa_value_t* kwargs) {
-    return pa_new_nil();
+    pa_value_t* socket = pa_get_argument(args, kwargs, 0, "socket", pa_new_nil());
+    pa_value_t* host= pa_get_argument(args, kwargs, 1, "host", pa_new_nil());
+    pa_value_t* port = pa_get_argument(args, kwargs, 2, "port", pa_new_nil());
+
+    int sock = socket->value.i32;
+    struct sockaddr_in addr;
+    
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = inet_addr(PV2STR(host)->c_str());
+    addr.sin_port = htons(port->value.u16);
+   
+    bind(sock, (struct sockaddr *)&addr, sizeof addr); 
+    return pa_new_integer(listen(sock, 1024));
 }
 
 pa_value_t* _accept(pa_value_t* args, pa_value_t* kwargs) {
-    return pa_new_nil();
+    pa_value_t* socket = pa_get_argument(args, kwargs, 0, "socket", pa_new_nil());
+    int sock = socket->value.i32;
+    return pa_new_integer(accept(sock, NULL, NULL));
 }
 
 pa_value_t* _close(pa_value_t* args, pa_value_t* kwargs) {
