@@ -88,12 +88,12 @@ pa_value_t* _close(pa_value_t* args, pa_value_t* kwargs) {
 
 extern "C" pa_value_t* PA_INIT() {
     return pa_new_dictionary(
-        pa_new_dictionary_kv(pa_new_string(string("socket")), pa_new_function(_socket)),
-        pa_new_dictionary_kv(pa_new_string(string("connect")), pa_new_function(_connect)),
-        pa_new_dictionary_kv(pa_new_string(string("read")), pa_new_function(_read)),
-        pa_new_dictionary_kv(pa_new_string(string("write")), pa_new_function(_write)),
-        pa_new_dictionary_kv(pa_new_string(string("listen")), pa_new_function(_listen)),
-        pa_new_dictionary_kv(pa_new_string(string("accept")), pa_new_function(_accept)),
-        pa_new_dictionary_kv(pa_new_string(string("close")), pa_new_function(_close)),
+        pa_new_dictionary_kv(pa_new_string("socket"), pa_new_function(_socket)),
+        pa_new_dictionary_kv(pa_new_string("connect"), pa_new_function(_connect)),
+        pa_new_dictionary_kv(pa_new_string("read"), pa_new_function(_read)),
+        pa_new_dictionary_kv(pa_new_string("write"), pa_new_function(_write)),
+        pa_new_dictionary_kv(pa_new_string("listen"), pa_new_function(_listen)),
+        pa_new_dictionary_kv(pa_new_string("accept"), pa_new_function(_accept)),
+        pa_new_dictionary_kv(pa_new_string("close"), pa_new_function(_close)),
     );       
 }
