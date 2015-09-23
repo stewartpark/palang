@@ -13,4 +13,5 @@ Just type the below:
 $ git clone https://github.com/stewartpark/palang
 $ cd palang
 $ pip install -r requirements.txt
+$ ./build_libs.sh
 ```
