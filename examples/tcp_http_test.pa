@@ -1,0 +1,19 @@
+import tcp
+
+s = tcp.socket()
+
+# Connect to google.com
+tcp.connect(s, "74.125.224.103", 80)
+
+# Send HTTP headers.
+tcp.write(s, "GET / HTTP/1.0\nHost: google.com\n\n")
+
+while true {
+    data = tcp.read(s)
+    print(data)
+    if len(data) == 0 {
+        break;
+    }
+}
+
+tcp.close(s)

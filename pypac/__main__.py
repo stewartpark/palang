@@ -55,7 +55,7 @@ else:
             except:
                 options.output = args[0] + '.so'
         else:
-            options.output = "a.out"
+            options.output = args[0][:-3]
     CXXFLAGS += " -o " + options.output + " "
     CXXFLAGS += " -I " + PA_HOME + "/include/ "
     if options.library:
