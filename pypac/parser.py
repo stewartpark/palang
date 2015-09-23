@@ -27,6 +27,7 @@ REAL    = Combine(Optional(oneOf("+ -")) + Word(nums) + "." +
 STRING  = QuotedString('"', multiline=False)\
         .setName("string")\
         .setParseAction(lambda t: ["STRING", t[0]])
+BOOL    = (Literal("true") | Literal("false") | Literal('yes') | Literal('no')).setParseAction(lambda t: ["BOOL", t[0]])
 LIST    = Forward()
 DICT    = Forward()
 FUNC    = Forward()
@@ -68,7 +69,7 @@ def_func_args = LPAREN + Optional(delimitedList(Group(def_func_arg))) + RPAREN
 def_func = Group(Group(expr_lvalue) + Group(def_func_args))\
         .setParseAction(lambda t: ["def_func", t[0]])
 
-expr_literal = Group(NIL | REAL | INTEGER | STRING | LIST | DICT | FUNC | VAR | expr_rvalue)
+expr_literal = Group(BOOL | NIL | REAL | INTEGER | STRING | LIST | DICT | FUNC | VAR | expr_rvalue)
 
 
 LIST << Group(LBRACK + Optional(delimitedList(Group(expr))) + RBRACK)\

@@ -3,7 +3,7 @@
 class CppCompiler:
     HEADER = "/* Automatically compiled from Pa language */\n#include <palang.h>"
     ENTRYPOINT = "int main(int argc,char**argv,char**env){PA_ENTER(argc,argv,env);return PA_LEAVE(PA_INIT());}"
-    def __init__(self, ast, exports=[], imports=[], intrinsics=["range", "print", "input"], is_library=False):
+    def __init__(self, ast, exports=[], imports=[], intrinsics=["range", "print", "input", "len"], is_library=False):
         self.root = ast
         self.exports = exports
         self.imports = imports
@@ -234,6 +234,9 @@ class CppCompiler:
     def _expr_literal(self, ast):
         if ast[0] == 'expr_rvalue':
             return self._expr_rvalue(ast[1])
+        elif ast[0] == 'BOOL':
+            v = {'true': 'true', 'false': 'false', 'yes': 'true', 'no': 'false'}[ast[1]]
+            return 'pa_new_boolean(' + v + ')'
         elif ast[0] == 'NIL':
             return 'pa_new_nil()'
         elif ast[0] == 'INTEGER':

@@ -203,6 +203,13 @@ inline pa_value_t* pa_new_class() {
     return r;
 }
 
+inline pa_value_t* pa_new_object() {
+    pa_value_t *r = new pa_value_t;
+    r->type = pa_object;
+    pool.push_back(r);
+    return r;
+}
+
 inline pa_value_t* pa_new_object(pa_class_data* _class) {
     pa_value_t *r = new pa_value_t;
     r->value.obj = new pa_object_data(_class);
@@ -673,6 +680,7 @@ inline int PA_LEAVE(pa_value_t *ret) {
 pa_value_t *print; \
 pa_value_t *range; \
 pa_value_t *input; \
+pa_value_t *len; \
 range = pa_new_function([](pa_value_t* args, pa_value_t* kwargs) -> pa_value_t* { \
         pa_value_t *start = pa_get_argument(args, kwargs, 0, "start", pa_new_nil()); \
         pa_value_t *end = pa_get_argument(args, kwargs, 1, "end", pa_new_nil()); \
@@ -721,6 +729,19 @@ range = pa_new_function([](pa_value_t* args, pa_value_t* kwargs) -> pa_value_t* 
         register int t = scanf("%lld", &N); \
         pa_value_t* n = pa_new_integer(N); \
         return n; \
+    }); \
+    len = pa_new_function([](pa_value_t* args, pa_value_t* kwargs) -> pa_value_t* { \
+        pa_value_t *o = pa_get_argument(args, kwargs, 0, "object", pa_new_nil()); \
+        switch(o->type) {\
+            case pa_list: \
+                return pa_new_integer(PV2LIST(o)->size()); \
+            case pa_string: \
+                return pa_new_integer(PV2STR(o)->length()); \
+            default: \
+                printf("Runtime Error: type mismatch(%d).\n", o->type); \
+                exit(1); \
+                break; \
+        } \
     });
 
 
