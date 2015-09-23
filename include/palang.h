@@ -626,12 +626,14 @@ inline pa_value_t* pa_import(string name) {
     //TODO Make it functional on Windows, Mac as well.
     string file_path;
     string file_name = "/" + name + ".so";
+    const char* pa_home = getenv("PA_HOME");
     string paths_to_search[] = {
         ".",
-        string(getenv("PA_HOME")) + "/libs"
+        "./libs",
+        pa_home ? string(pa_home) + "/libs" : "/usr/local/palang/libs"
     };
     
-    for(unsigned i = 0; i <= 1; i++) {
+    for(unsigned i = 0; i <= 2; i++) {
         file_path = paths_to_search[i] + file_name;
         if(access(file_path.c_str(), F_OK) != -1) {
             break;   
