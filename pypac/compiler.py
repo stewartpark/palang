@@ -29,8 +29,10 @@ class CppGenerator:
         return "\"" + v + "\""
     def evaluate_multiline(self, *args):
         return "([=]() -> pa_value_t* {" + ("".join(args)) + "})()"
-    def op(self, op, a, b=None):
+    def op(self, op, a, b=None, c=None):
         t_op = {
+            'setitem': lambda: self.cfunc_call("pa_operator_setitem", a, b, c),
+            'setattr': lambda: self.cfunc_call("pa_operator_setattr", a, b, c),
             'getitem': lambda: self.cfunc_call("pa_operator_getitem", a, b),
             'getattr': lambda: self.cfunc_call("pa_operator_getattr", a, b),
             '+': lambda: self.cfunc_call("pa_operator_add", a, b),
@@ -52,7 +54,7 @@ class CppGenerator:
             'or': lambda: self.cfunc_call("pa_operator_or", a, b)
         }
         return t_op[op]()
-    def cop(self, op, a, b=None):
+    def cop(self, op, a, b=None, c=None):
         t_op = {
             '++': lambda: a + "++",
             '<': lambda: a + "<" + b
@@ -234,23 +236,20 @@ class Compiler:
         if ast[0] == 'stat_assign':
             t = ast[1][0]
             if t[0] == 'def_var':
-                src = ""
-                lv = self._expr_lvalue(t[1][1])
+                self.enter_func()
+                src = self.generator.evaluate_multiline(*[self._stat(x) for x in ast[1][1]])
+                self.leave_func()
+                
+                src = self._expr_lvalue_assignment(t[1][1], src)
                 def_vars = ""
                 for x in self.get_reset_new_vars():
                     def_vars += self.generator.define_var(x) 
-                src += def_vars
-                self.enter_func()
-                src += self.generator.stat_assign(lv, self.generator.evaluate_multiline(*[self._stat(x) for x in ast[1][1]]))
-                self.leave_func()
+                src = def_vars + src
                 return src
             elif t[0] == 'def_func':
                 src = ""
-                lv = self._expr_lvalue(t[1][0][1])
-                def_vars = ""
-                for x in self.get_reset_new_vars():
-                    def_vars += self.generator.define_var(x) 
                 args = t[1][1]
+                self._expr_lvalue_predefine(t[1][0][1])
                 self.enter_func()
                 for i, x in enumerate(args):
                     var_name = x[1][0][1]
@@ -263,7 +262,11 @@ class Compiler:
                 for s in ast[1][1]:
                     src += self._stat(s)
                 self.leave_func()
-                return def_vars + self.generator.stat_assign(lv, self.generator.literal_func(src))
+                src = self._expr_lvalue_assignment(t[1][0][1], self.generator.literal_func(src))
+                def_vars = ""
+                for x in self.get_reset_new_vars():
+                    def_vars += self.generator.define_var(x) 
+                return def_vars + src
             else:
                 raise Exception("Semantic error")
         else:
@@ -413,32 +416,40 @@ class Compiler:
         else:
             raise Exception("Semantic error")
     def _expr_lvalue(self, ast):
-        if len(ast) == 1:
-            var_name = ast[0][1] # IDENT
-            if var_name in self.scope[-1]:
-                if 'w' in self.scope[-1][var_name]:
-                    return self.generator.var_name(var_name)
-                else:
-                    raise Exception("Variable is read-only in the scope: " + str(var_name))
-            else:
-                self.define(var_name)
+        var_name = ast[0][1] # IDENT
+        if var_name in self.scope[-1]:
+            if 'w' in self.scope[-1][var_name]:
                 return self.generator.var_name(var_name)
+            else:
+                raise Exception("Variable is read-only in the scope: " + str(var_name))
         else:
-            src = ""
-            i = 0
-            while True:
-                if ast[i][0] == 'IDENT':
-                    src += self._expr_lvalue([ast[i]])
-                elif ast[i][0] == 'expr_lvalue_item':
-                    src = self.generator.op("setitem", src, self._expr(ast[i][1]))
-                elif ast[i][0] == 'expr_lvalue_attr':
-                    src = self.generator.op("setattr", src, self.generator.literal_cstr(ast[i][1][1]))
-                else:
-                    raise Exception("Semantic error")
-                i += 1
-                if len(ast) <= i:
-                    break
-            return src
+            self.define(var_name)
+            return self.generator.var_name(var_name)
+    def _expr_lvalue_predefine(self, ast):
+        if len(ast) == 1:
+            self._expr_lvalue(ast) # just to see if the variable should be defined.
+    def _expr_lvalue_assignment(self, ast, rvalue):
+        src = ""
+        i = 0
+        while True:
+            if len(ast) <= i+1:
+                break # One element left!
+            if ast[i][0] == 'IDENT':
+                src += self._expr_rvalue([ast[i]])
+            elif ast[i][0] == 'expr_lvalue_item':
+                src = self.generator.op("getitem", src, self._expr(ast[i][1]))
+            elif ast[i][0] == 'expr_lvalue_attr':
+                src = self.generator.op("getattr", src, self.generator.literal_cstr(ast[i][1][1]))
+            else:
+                raise Exception("Semantic error")
+            i += 1
+        if ast[i][0] == 'IDENT':
+            src = self.generator.stat_assign(self._expr_lvalue([ast[i]]), rvalue)
+        elif ast[i][0] == 'expr_lvalue_item':
+            src = self.generator.op("setitem", src, self._expr(ast[i][1]), rvalue)
+        elif ast[i][0] == 'expr_lvalue_attr':
+            src = self.generator.op("setattr", src, self.generator.literal_cstr(ast[i][1][1]), rvalue)
+        return src
     def _expr_rvalue(self, ast):
         if len(ast) == 1:
             var_name = ast[0][1] # IDENT

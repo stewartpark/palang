@@ -252,6 +252,37 @@ pa_value_t* pa_get_argument(pa_value_t *args, pa_value_t *kwargs, const size_t n
 }
 
 // Operators
+inline pa_value_t* pa_operator_setitem(pa_value_t* a, pa_value_t* b, pa_value_t* c) {
+    list<pa_value_t*>* l;
+    list<pa_value_t*>::iterator it;
+    map<string,pa_value_t*>* m;
+    string* s;
+
+    switch(a->type) {
+        case pa_list:
+            l = PV2LIST(a);
+            switch(b->type) {
+                case pa_integer:
+                    if(l->size() <= b->value.i64) {
+                        printf("Runtime Error: List index out of range.\n");
+                        exit(1);
+                    }
+                    it = l->begin();
+                    advance(it, b->value.i64);
+                    return *it = c;
+                default:
+                   goto type_mismatch;
+            }
+        case pa_dictionary:
+            m = PV2MAP(a);
+            return (*m)[pa_operator_hash(b)] = c;
+        default:
+            goto type_mismatch;
+    }
+type_mismatch:
+    printf("Runtime Error: Type mismatch([]).\n");
+    exit(1);
+}
 
 inline pa_value_t* pa_operator_getitem(pa_value_t* a, pa_value_t* b) {
     list<pa_value_t*>* l;
@@ -298,6 +329,30 @@ type_mismatch:
     exit(1);
 }
 
+inline pa_value_t* pa_operator_setattr(pa_value_t* a, string b, pa_value_t* c) {
+    pa_value_t* ret;
+    switch(a->type) {
+        case pa_object:
+            ret = a->value.obj->get_member(b);
+            if(!ret) {
+                ret = a->value.obj->get_class()->get_operator("setattr");
+                if(ret) {
+                    ret = pa_function_call(ret, pa_new_list(a, pa_new_string(b), c), pa_new_dictionary());
+                } else {
+                    printf("Runtime Error: no such attribute/method.\n");
+                    exit(1); 
+                }
+            } else {
+                a->value.obj->set_member(b, c);
+            }
+            return ret;
+        default:
+            goto type_mismatch;
+    }
+type_mismatch:
+    printf("Runtime Error: Type mismatch(.).\n");
+    exit(1);
+}
 inline pa_value_t* pa_operator_getattr(pa_value_t* a, string b) {
     pa_value_t* ret;
     switch(a->type) {

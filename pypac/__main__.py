@@ -31,7 +31,7 @@ for x in args:
         source += open(x).read() + "\n"
 
 ast = parser.parse(source)
-if options.verbose: print ast
+if options.verbose: pp.pprint(eval(str(ast)))
 
 cxx = cpp_source
 if source:
