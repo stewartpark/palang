@@ -1,9 +1,105 @@
-
-
-class CppCompiler:
+class CppGenerator:
     HEADER = "/* Automatically compiled from Pa language */\n#include <palang.h>"
     ENTRYPOINT = "int main(int argc,char**argv,char**env){PA_ENTER(argc,argv,env);return PA_LEAVE(PA_INIT());}"
-    def __init__(self, ast, exports=[], imports=[], intrinsics=["range", "print", "input", "len"], is_library=False):
+    def finalize(self, code, has_entrypoint=True):
+        return "%s\nextern \"C\" pa_value_t* PA_INIT(){INTRINSICS();%s;};%s" % (CppGenerator.HEADER, code, CppGenerator.ENTRYPOINT if has_entrypoint else "")
+    def cfunc_call(self, name, *args):
+        return name + "(" + (",".join(args)) + ")"
+    def func_call(self, name, *args, **kwargs):
+        return self.cfunc_call("pa_function_call", name, self.literal_list(*args), self.literal_dict(*[self.literal_dict_kw(x,y) for x,y in kwargs]))
+    def literal_nil(self):
+        return self.cfunc_call("pa_new_nil")
+    def literal_bool(self, v):
+        return self.cfunc_call("pa_new_boolean", str(int(v)))
+    def literal_int(self, v):
+        return self.cfunc_call("pa_new_integer", str(v))
+    def literal_real(self, v):
+        return self.cfunc_call("pa_new_real", str(v))
+    def literal_str(self, v):
+        return self.cfunc_call("pa_new_string", "\"" + v + "\"")
+    def literal_func(self, *args):
+        return self.cfunc_call("pa_new_function", "[=](pa_value_t* args, pa_value_t* kwargs){" + ("".join(args)) + "}")
+    def literal_list(self, *args):
+        return self.cfunc_call("pa_new_list", *args)
+    def literal_dict_kv(self, k, v):
+        return self.cfunc_call("pa_new_dictionary_kv", k, v)
+    def literal_dict(self, *args):
+        return self.cfunc_call("pa_new_dictionary", *args)
+    def literal_cstr(self, v):
+        return "\"" + v + "\""
+    def evaluate_multiline(self, *args):
+        return "([=]() -> pa_value_t* {" + ("".join(args)) + "})()"
+    def op(self, op, a, b=None):
+        t_op = {
+            'getitem': lambda: self.cfunc_call("pa_operator_getitem", a, b),
+            'getattr': lambda: self.cfunc_call("pa_operator_getattr", a, b),
+            '+': lambda: self.cfunc_call("pa_operator_add", a, b),
+            '-': lambda: self.cfunc_call("pa_operator_subtract", a, b),
+            '*': lambda: self.cfunc_call("pa_operator_multiply", a, b),
+            '/': lambda: self.cfunc_call("pa_operator_divide", a, b),
+            'mod': lambda: self.cfunc_call("pa_operator_modulo", a, b),
+            'length': lambda: self.cfunc_call("pa_operator_length", a),
+            '^': lambda: self.cfunc_call("pa_operator_power", a, b),
+            '==': lambda: self.cfunc_call("pa_operator_eq", a, b),
+            '!=': lambda: self.cfunc_call("pa_operator_neq", a, b),
+            '>': lambda: self.cfunc_call("pa_operator_gt", a, b),
+            '>=': lambda: self.cfunc_call("pa_operator_gte", a, b),
+            '<': lambda: self.cfunc_call("pa_operator_lt", a, b),
+            '<=': lambda: self.cfunc_call("pa_operator_lte", a, b),
+            '->': lambda: self.cfunc_call("pa_operator_right", a, b),
+            '<-': lambda: self.cfunc_call("pa_operator_left", a, b),
+            'and': lambda: self.cfunc_call("pa_operator_and", a, b),
+            'or': lambda: self.cfunc_call("pa_operator_or", a, b)
+        }
+        return t_op[op]()
+    def cop(self, op, a, b=None):
+        t_op = {
+            '++': lambda: a + "++",
+            '<': lambda: a + "<" + b
+        }
+        return t_op[op]()
+    def var_name(self, v):
+        return "_" + v
+    def define_var(self, v, V=None):
+        return "pa_value_t*  " + self.var_name(v)  + (("="+V) if V else "") + ";"
+    def define_cvar(self, t, v, V=None):
+        t_type = {
+            'i64': 'int64_t'
+        }
+        return t_type[t] + " " + v + ("="+V if V else "")
+    def raw_var(self, t, name):
+        t_type = {
+            'i64': 'i64'
+        }
+        return name + "->value." + t_type[t]
+    def define_param(self, v, n, kw, df):
+        return "pa_value_t* " + self.var_name(v) + " = " + self.cfunc_call("pa_get_argument", "args", "kwargs", str(n), self.literal_cstr(str(kw)), str(df)) + ";"
+    def stat_assign(self, n, v):
+        return n + "=" + v + ";"
+    def stat_import(self, v):
+        return self.cfunc_call("pa_import", "\"" + str(v) + "\"")
+    def stat_ret(self, v):
+        return "return " + v + ";"
+    def stat_block(self, v):
+        return "{" + v + "}"
+    def stat_for(self, initial, condition, incremental, *args):
+        return "for(" + initial + ";" + condition + ";" + incremental + "){" + ("".join(args)) + "}"
+    def stat_while(self, condition, *args):
+        return "while(" + (self.cfunc_call("pa_evaluate_into_boolean", condition)) + "){" + ("".join(args)) + "}" 
+    def stat_if(self, condition, stats, else_stats=None):
+        return "if(" + (self.cfunc_call("pa_evaluate_into_boolean", condition)) + "){" + stats + "}" + (("else{" + else_stats + "}") if else_stats else "")
+    def stat_break(self):
+        return "break"
+    def stat_continue(self):
+        return "continue"
+    def finalize_line(self, v):
+        return v + ";"
+    
+
+
+class Compiler:
+    def __init__(self, ast, generator=CppGenerator(), exports=[], imports=[], intrinsics=["range", "print", "input", "len"], is_library=False):
+        self.generator = generator
         self.root = ast
         self.exports = exports
         self.imports = imports
@@ -53,13 +149,24 @@ class CppCompiler:
         self.new_vars = [{}]
         self.scope_prop = ['c']
         src = self._program(self.root)
+
         src_def_export = ""
         for x in self.exports:
-            src_def_export += "pa_value_t*" + x[1] + ";"
-        src_export = "pa_new_dictionary("
-        src_export += ",".join(map(lambda x: "pa_new_dictionary_kv(pa_new_string(\"" + x[0] + "\")," + x[1] + ")", self.exports))  
-        src_export += ")"
-        return "%s\nextern \"C\" pa_value_t*PA_INIT(){INTRINSICS();%s;%s;return %s;};%s" % (CppCompiler.HEADER, src_def_export, src, src_export, CppCompiler.ENTRYPOINT if not self.is_library else "")
+            src_def_export += self.generator.define_var(x[1])
+
+        src_export = self.generator.literal_dict( 
+            *map(lambda x: self.generator.literal_dict_kv(
+                self.generator.literal_str(x[0]),
+                self.generator.var_name(x[1])), self.exports)
+        )
+        return self.generator.finalize(
+                (
+                    src_def_export + 
+                    src + 
+                    self.generator.stat_ret(src_export)
+                ),
+                has_entrypoint=(not self.is_library)
+        )
     # Rules
     def _program(self, ast):
         if ast[0] == 'program':
@@ -86,7 +193,7 @@ class CppCompiler:
             }[stat_name]
             if stat_name in ['stat_export', 'stat_import'] and topmost == False:
                 raise Exception("import/exports can be used only in the global scope.")
-            return stat_fn(ast[1]) + ';'
+            return self.generator.finalize_line(stat_fn(ast[1]))
         else:
             raise Exception("Semantic error")
     def _stat_import(self, ast):
@@ -102,8 +209,8 @@ class CppCompiler:
                 if name in self.scope[-1] and 'w' not in self.scope[-1][name]:
                     raise Exception("Assigning a library at a read-only variable.")
                 if name not in self.scope[-1]:
-                    src += "pa_value_t*" + name + ";"
-                src += name + "=pa_import(\"" + lib_name + "\");"
+                    src += self.generator.define_var(name) 
+                src += self.generator.stat_assign(self.generator.var_name(name), self.generator.stat_import(lib_name))
                 self.import_(lib_name, name)
             return src
         else:
@@ -119,8 +226,6 @@ class CppCompiler:
                     name = my_name
                 if my_name in self.scope[-1]:
                     raise Exception("Exporting a variable that is already defined in the scope.")
-
-
                 self.export_(name, my_name)
             return src
         else:
@@ -133,35 +238,32 @@ class CppCompiler:
                 lv = self._expr_lvalue(t[1][1])
                 def_vars = ""
                 for x in self.get_reset_new_vars():
-                    def_vars += "pa_value_t *" + x + ";"
-                src += def_vars + lv + '='
-                src += "([=]()->pa_value_t*{" #FUNC 
+                    def_vars += self.generator.define_var(x) 
+                src += def_vars
                 self.enter_func()
-                for x in ast[1][1]:
-                    src += self._stat(x)
+                src += self.generator.stat_assign(lv, self.generator.evaluate_multiline(*[self._stat(x) for x in ast[1][1]]))
                 self.leave_func()
-                src += "})()"
                 return src
             elif t[0] == 'def_func':
                 src = ""
                 lv = self._expr_lvalue(t[1][0][1])
                 def_vars = ""
                 for x in self.get_reset_new_vars():
-                    def_vars += "pa_value_t *" + x + ";"
+                    def_vars += self.generator.define_var(x) 
                 args = t[1][1]
                 self.enter_func()
                 for i, x in enumerate(args):
                     var_name = x[1][0][1]
                     if len(x[1]) == 1:
-                        df = "pa_new_nil()"
+                        df = self.generator.literal_nil()
                     else:
                         df = self._expr(x[1][1])
-                    src += "pa_value_t*" + var_name + "=pa_get_argument(args,kwargs," + str(i) + ",\"" + var_name + "\"," + df + ");"
+                    src += self.generator.define_param(var_name, i, var_name, df)
                     self.define(var_name, need_to_be_declared=False)
                 for s in ast[1][1]:
                     src += self._stat(s)
                 self.leave_func()
-                return def_vars + lv + "=pa_new_function([=](pa_value_t *args, pa_value_t *kwargs)->pa_value_t* {" + src + "})" #FUNC
+                return def_vars + self.generator.stat_assign(lv, self.generator.literal_func(src))
             else:
                 raise Exception("Semantic error")
         else:
@@ -177,19 +279,22 @@ class CppCompiler:
     def _stat_for(self, ast):
         if ast[0] == 'stat_for':
             self.enter_loop() 
-            src = ""
             ident = ast[1][0]
             val = ast[1][1]
             stats = ast[1][2]
             self.define(ident[1], read_only=True, need_to_be_declared=False) # make known. index var
-            src += "{"
-            src += "pa_value_t *__for_ref__=" + self._expr(val) + ";"
-            src += "pa_value_t *__for_ref_len__=pa_operator_length(__for_ref__);"
-            src += "pa_value_t *" + ident[1] + ";"
-            src += "for(int64_t __for_index__ = 0; __for_index__ < __for_ref_len__->value.i64; __for_index__++){"
-            src += ident[1] + "=pa_operator_getitem(__for_ref__, pa_new_integer(__for_index__));"
-            src += "".join(map(self._stat, stats))
-            src += "}}"
+            src = self.generator.stat_block(
+                self.generator.define_var("_for_ref_", self._expr(val)) +
+                self.generator.define_var("_for_ref_len_", self.generator.op("length", self.generator.var_name("_for_ref_"))) +
+                self.generator.define_var(ident[1]) + 
+                self.generator.stat_for(
+                    self.generator.define_cvar("i64", "__for_index__", "0"),
+                    self.generator.cop("<", "__for_index__", self.generator.raw_var("i64", self.generator.var_name("_for_ref_len_"))),
+                    self.generator.cop("++", "__for_index__"),
+                    self.generator.stat_assign(self.generator.var_name(ident[1]), self.generator.op("getitem", self.generator.var_name("_for_ref_"), self.generator.literal_int("__for_index__"))),
+                    *map(self._stat, stats)
+                )
+            )
             self.leave_loop()
             return src
         else:
@@ -197,65 +302,68 @@ class CppCompiler:
     def _stat_while(self, ast):
         if ast[0] == 'stat_while':
             self.enter_loop() 
-            src = ""
             val = ast[1][0]
             stats = ast[1][1]
-            src += "while(pa_evaluate_into_boolean(" + self._expr(val) + ")){"
-            src += "".join(map(self._stat, stats))
-            src += "}"
+            src = self.generator.stat_while(self._expr(val), *map(self._stat, stats)) 
             self.leave_loop()
             return src
         else:
             raise Exception("Semantic error")
     def _stat_break(self, ast):
         if 'l' in self.scope_prop[-1]: # type should be l(loop)
-            return "break"
+            return self.generator.stat_break()
         else:
             raise Exception("Cannot use break outside a loop")
     def _stat_continue(self, ast):
         if 'l' in self.scope_prop[-1]: # type should be l(loop)
-            return "continue"
+            return self.generator.stat_continue()
         else:
             raise Exception("Cannot use continue outside a loop")
     def _stat_if(self, ast):
         if ast[0] == 'stat_if':
             src = ""
+            l = []
             meat = ast[1]
             for i, x in enumerate(meat):
                 if i == 0:
-                    src += "if(pa_evaluate_into_boolean(" + self._expr(x[0]) + ")){" + ("".join(map(self._stat, x[1]))) + "}"
+                    l.append([self._expr(x[0]), "".join(map(self._stat, x[1]))])
                 elif len(x) == 2:
-                    src += "else if(pa_evaluate_into_boolean(" + self._expr(x[0]) + ")){" + ("".join(map(self._stat, x[1]))) + "}"
+                    l.append([self._expr(x[0]), "".join(map(self._stat, x[1]))])
                 else:
-                    src += "else{" + ("".join(map(self._stat, x[0]))) + "}"
+                    l.append(["".join(map(self._stat, x[0]))])
+            for x in range(len(l)-1,-1,-1):
+                if len(l[x]) == 1:
+                    src = l[x][0]
+                else:
+                    src = self.generator.stat_if(l[x][0], l[x][1], else_stats=src)
             return src
         else:
             raise Exception("Semantic error")
     def _stat_ret(self, ast):
         if ast[0] == 'stat_ret':
-            return "return " + self._expr(ast[1]);
+            return self.generator.stat_ret(self._expr(ast[1]));
     # Expressions
     def _expr_literal(self, ast):
         if ast[0] == 'expr_rvalue':
             return self._expr_rvalue(ast[1])
         elif ast[0] == 'BOOL':
-            v = {'true': 'true', 'false': 'false', 'yes': 'true', 'no': 'false'}[ast[1]]
-            return 'pa_new_boolean(' + v + ')'
+            v = {'true': True, 'false': False, 'yes': True, 'no': False}[ast[1]]
+            return self.generator.literal_bool(v) 
         elif ast[0] == 'NIL':
-            return 'pa_new_nil()'
+            return self.generator.literal_nil() 
         elif ast[0] == 'INTEGER':
-            return "pa_new_integer(" + str(ast[1]) + ")"
+            return self.generator.literal_int(str(ast[1]))
         elif ast[0] == 'REAL':
-            return "pa_new_real(" + str(ast[1]) + ")"
+            return self.generator.literal_real(str(ast[1]))
         elif ast[0] == 'STRING':
-            return "pa_new_string(\"" + ast[1] + "\")"
+            return self.generator.literal_str(ast[1])
         elif ast[0] == 'VAR':
             src = ""
             self.enter_func()
             for s in ast[1]:
                 src += self._stat(s)
             self.leave_func()
-            return "([=]()->pa_value_t*{" + src + "})()" #FUNC
+            return self.generator.evaluate_multiline(src)
         elif ast[0] == 'FUNC':
             src = ""
             args = ast[1][0]
@@ -263,17 +371,17 @@ class CppCompiler:
             for i, x in enumerate(args):
                 var_name = x[1][0][1]
                 if len(x[1]) == 1:
-                    df = "pa_new_nil()"
+                    df = self.generator.literal_nil() 
                 else:
                     df = self._expr(x[1][1])
-                src += "pa_value_t*" + var_name + "=pa_get_argument(args,kwargs," + str(i) + ",\"" + var_name + "\"," + df + ");"
+                src += self.generator.define_param(var_name, i, var_name, df)
                 self.define(var_name, need_to_be_declared=False)
             for s in ast[1][1]:
                 src += self._stat(s)
             self.leave_func()
-            return "pa_new_function([=](pa_value_t *args, pa_value_t *kwargs)->pa_value_t* {" + src + "})" #FUNC
+            return self.generator.literal_func(src)
         elif ast[0] == 'LIST':
-            return "pa_new_list(" + ",".join(map(self._expr, ast[1])) + ")"
+            return self.generator.literal_list(*map(self._expr, ast[1]))
         elif ast[0] == 'DICT':
             pass
         else:
@@ -285,34 +393,16 @@ class CppCompiler:
             return self._expr_literal(ast[0])
         elif len(ast) == 2:
             if ast[0] == 'not':
-                return "pa_operator_not(" + self._expr_literal(ast[1]) + ")"
+                return self.generator.op("not", self._expr_literal(ast[1]))
             elif type(ast[1]) == str and ast[1] in '&!?':
                 raise Exception("Not implemented")
             else:
                 raise Exception("Semantic error")
         else:
-            opf = {
-                '+': 'pa_operator_add',
-                '-': 'pa_operator_subtract',
-                '*': 'pa_operator_multiply',
-                '/': 'pa_operator_divide',
-                'mod': 'pa_operator_modulo',
-                '^': 'pa_operator_power',
-                '==': 'pa_operator_eq',
-                '!=': 'pa_operator_neq',
-                '>': 'pa_operator_gt',
-                '>=': 'pa_operator_gte',
-                '<': 'pa_operator_lt',
-                '<=': 'pa_operator_lte',
-                '->': 'pa_operator_right',
-                '<-': 'pa_operator_left',
-                'and': 'pa_operator_and',
-                'or': 'pa_operator_or'
-            }
             src = self._expr_literal(ast[0])
             i = 1
             while True:
-                src = opf[ast[i]] + '(' + src + ',' + self._expr_literal(ast[i+1]) + ')'
+                src = self.generator.op(ast[i], src, self._expr_literal(ast[i+1]))
                 i += 2
                 if len(ast) <= i:
                     break
@@ -327,12 +417,12 @@ class CppCompiler:
             var_name = ast[0][1] # IDENT
             if var_name in self.scope[-1]:
                 if 'w' in self.scope[-1][var_name]:
-                    return var_name
+                    return self.generator.var_name(var_name)
                 else:
                     raise Exception("Variable is read-only in the scope: " + str(var_name))
             else:
                 self.define(var_name)
-                return var_name
+                return self.generator.var_name(var_name)
         else:
             src = ""
             i = 0
@@ -340,9 +430,9 @@ class CppCompiler:
                 if ast[i][0] == 'IDENT':
                     src += self._expr_lvalue([ast[i]])
                 elif ast[i][0] == 'expr_lvalue_item':
-                    src = "pa_operator_setitem(" + src + "," + self._expr(ast[i][1]) + ")"
+                    src = self.generator.op("setitem", src, self._expr(ast[i][1]))
                 elif ast[i][0] == 'expr_lvalue_attr':
-                    src = "pa_operator_setattr(" + src + ",\"" + ast[i][1][1] + "\")"
+                    src = self.generator.op("setattr", src, self.generator.literal_cstr(ast[i][1][1]))
                 else:
                     raise Exception("Semantic error")
                 i += 1
@@ -353,7 +443,7 @@ class CppCompiler:
         if len(ast) == 1:
             var_name = ast[0][1] # IDENT
             if var_name in self.scope[-1]:
-                return var_name
+                return self.generator.var_name(var_name)
             else:
                 raise Exception("No such variable in the scope: " + var_name)
         else:
@@ -363,24 +453,15 @@ class CppCompiler:
                 if ast[i][0] == 'IDENT':
                     src += self._expr_rvalue([ast[i]])
                 elif ast[i][0] == 'expr_rvalue_item':
-                    src = "pa_operator_getitem(" + src + "," + self._expr(ast[i][1]) + ")"
+                    src = self.generator.op("getitem", src, self._expr(ast[i][1]))
                 elif ast[i][0] == 'expr_rvalue_attr':
-                    src = "pa_operator_getattr(" + src + ",\"" + ast[i][1][1] + "\")"
+                    src = self.generator.op("getattr", src, self.generator.literal_cstr(ast[i][1][1]))
                 elif ast[i][0] == 'expr_rvalue_call':
                     fargs = ast[i][1]
-                    __args = filter(lambda x: x[0] == 'expr', fargs) 
-                    __kwargs = filter(lambda x: x[0] == 'expr_func_kwarg', fargs)
-                    # args
-                    s_args = ""
-                    for x in __args:
-                        s_args += self._expr(x) + ","
-                    s_args = s_args[:-1]
-                    # kwargs
-                    s_kwargs = ""
-                    for x in __kwargs:
-                        s_kwargs += "pa_new_dictionary_kv(pa_new_string(\"" + x[1][0][1] + "\")," + self._expr(x[1][1]) + "),"
-                    s_kwargs = s_kwargs[:-1]
-                    src ="pa_function_call(" + src + ",pa_new_list(" + s_args + "),pa_new_dictionary(" + s_kwargs + "))"
+                    src = self.generator.func_call(src, 
+                            *[self._expr(x) for x in filter(lambda x: x[0] == 'expr', fargs)], 
+                            **{x[1][0][1]: self._expr(x[1][1]) for x in filter(lambda x: x[0] == 'expr_func_kwarg', fargs)}
+                    )
                 else:
                     raise Exception("Semantic error")
                 i += 1
@@ -393,5 +474,5 @@ class CppCompiler:
 
         
 
-def compile(ast, compiler=CppCompiler, **kwargs):
+def compile(ast, compiler=Compiler, **kwargs):
     return compiler(ast, **kwargs).compile()

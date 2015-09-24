@@ -14,7 +14,7 @@ COMMENT = Literal('#') + restOfLine
 #FIXME Ident shouldn't be matched if it's a reserved keyword
 IDENT = Regex(r'[a-zA-Z_][a-zA-Z0-9_]*')\
         .setParseAction(lambda t: ["IDENT", t[0]])
-PACKAGE_NAME = Combine(Word(alphas) + ZeroOrMore(Literal(".") + Word(alphas))).setParseAction(lambda t: ["PACKAGE_NAME", t[0]])
+PACKAGE_NAME = Combine(Regex(r'[a-zA-Z_][a-zA-Z0-9_]*') + ZeroOrMore(Literal(".") + Regex(r'[a-zA-Z_][a-zA-Z0-9_]*'))).setParseAction(lambda t: ["PACKAGE_NAME", t[0]])
 NIL     = Literal("nil").setParseAction(lambda t: ["NIL", t[0]])
 INTEGER = Combine(Optional(oneOf("+ -")) + Word(nums))\
     .setName("integer")\
@@ -75,7 +75,7 @@ expr_literal = Group(BOOL | NIL | REAL | INTEGER | STRING | LIST | DICT | FUNC |
 LIST << Group(LBRACK + Optional(delimitedList(Group(expr))) + RBRACK)\
         .setParseAction(lambda t: ["LIST", t[0]])
 
-DICT << Group(LBRACE + Optional(delimitedList(expr_literal + COLON + expr)) + RBRACE)\
+DICT << Group(LBRACE + Optional(delimitedList(Group(expr_literal) + COLON + Group(expr))) + RBRACE)\
         .setParseAction(lambda t: ["DICT", t[0]])
 
 FUNC << Group(Suppress("func") + Group(def_func_args) + Group(def_stat_block)).setParseAction(lambda t: ["FUNC", t[0]])

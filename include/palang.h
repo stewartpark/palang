@@ -443,6 +443,13 @@ inline pa_value_t* pa_operator_eq(pa_value_t* a, pa_value_t* b) {
                 default:
                     goto type_mismatch;
             }
+        case pa_string:
+            switch(b->type) {
+                case pa_string:
+                    return pa_new_boolean((*PV2STR(a)) == (*PV2STR(b)));
+                default:
+                    goto type_mismatch;
+            }
         default:
             goto type_mismatch; 
     }
@@ -662,8 +669,7 @@ inline pa_value_t* pa_import(string name) {
 
         return pa_new_object(mod_class->value.cls);
     } else {
-        printf("Runtime Error: no such library. %s\n", name.c_str());
-        printf("%s\n", dlerror());
+        printf("Runtime Error: %s\n", dlerror());
         exit(1);
     }
 }
@@ -679,11 +685,11 @@ inline int PA_LEAVE(pa_value_t *ret) {
 
 // Intrinsics
 #define INTRINSICS() \
-pa_value_t *print; \
-pa_value_t *range; \
-pa_value_t *input; \
-pa_value_t *len; \
-range = pa_new_function([](pa_value_t* args, pa_value_t* kwargs) -> pa_value_t* { \
+    pa_value_t *_print; \
+    pa_value_t *_range; \
+    pa_value_t *_input; \
+    pa_value_t *_len; \
+    _range = pa_new_function([](pa_value_t* args, pa_value_t* kwargs) -> pa_value_t* { \
         pa_value_t *start = pa_get_argument(args, kwargs, 0, "start", pa_new_nil()); \
         pa_value_t *end = pa_get_argument(args, kwargs, 1, "end", pa_new_nil()); \
         pa_value_t *step = pa_get_argument(args, kwargs, 2, "step", pa_new_integer(1)); \
@@ -700,7 +706,7 @@ range = pa_new_function([](pa_value_t* args, pa_value_t* kwargs) -> pa_value_t* 
             exit(1); \
         } \
     }); \
-    print = pa_new_function([](pa_value_t* args, pa_value_t* kwargs) -> pa_value_t* { \
+    _print = pa_new_function([](pa_value_t* args, pa_value_t* kwargs) -> pa_value_t* { \
         list<pa_value_t*> *_args = PV2LIST(args); \
         list<pa_value_t*>::iterator it; \
         for(it = _args->begin(); it != _args->end(); ++it) { \
@@ -726,13 +732,13 @@ range = pa_new_function([](pa_value_t* args, pa_value_t* kwargs) -> pa_value_t* 
         } \
         return pa_new_nil(); \
     }); \
-    input = pa_new_function([](pa_value_t* args, pa_value_t* kwargs) -> pa_value_t* { \
+    _input = pa_new_function([](pa_value_t* args, pa_value_t* kwargs) -> pa_value_t* { \
         long long int N; \
         register int t = scanf("%lld", &N); \
         pa_value_t* n = pa_new_integer(N); \
         return n; \
     }); \
-    len = pa_new_function([](pa_value_t* args, pa_value_t* kwargs) -> pa_value_t* { \
+    _len = pa_new_function([](pa_value_t* args, pa_value_t* kwargs) -> pa_value_t* { \
         pa_value_t *o = pa_get_argument(args, kwargs, 0, "object", pa_new_nil()); \
         switch(o->type) {\
             case pa_list: \
