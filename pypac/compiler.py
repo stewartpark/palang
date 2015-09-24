@@ -117,6 +117,10 @@ class CppCompiler:
                     name = i[1][1] 
                 else:
                     name = my_name
+                if my_name in self.scope[-1]:
+                    raise Exception("Exporting a variable that is already defined in the scope.")
+
+
                 self.export_(name, my_name)
             return src
         else:

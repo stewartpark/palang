@@ -1,0 +1,9 @@
+import file
+
+f = file.open("../README.md")
+if f != 0 {
+    print(file.read(f))
+    file.close(f)
+} else {
+    print("File not found!\n")
+}
