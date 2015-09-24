@@ -1,0 +1,40 @@
+export substring
+export startsWith
+export split
+
+substring(s, start, end) {
+    r = ""
+    for i in range(start, end) {
+        r = r + s[i]
+    }
+    = r
+}
+
+startsWith(s1, s2) {
+    i = 0
+    while true {
+        if s1[i] != s2[i] {
+            = false   
+        }
+        i = i + 1
+        if i == len(s2), break
+    }
+    = true
+}
+
+split(s, delimiter=" ") {
+    r = []
+    cur = ""
+    while true {
+        if startsWith(s, delimiter) {
+            r = r + [cur]
+            cur = ""
+        } else {
+            cur = cur + s[0]
+        }
+        s = substring(s, 1, len(s)-1)
+        if len(s) == 0, break
+    }
+    if len(cur), r = r + [cur]
+    = r   
+}

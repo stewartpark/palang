@@ -528,6 +528,13 @@ inline pa_value_t* pa_operator_neq(pa_value_t* a, pa_value_t* b) {
                 default:
                     goto type_mismatch;
             }
+        case pa_string:
+            switch(b->type) {
+                case pa_string:
+                    return pa_new_boolean((*PV2STR(a)) != (*PV2STR(b)));
+                default:
+                    goto type_mismatch;
+            }
         default:
             goto type_mismatch; 
     }
