@@ -8,14 +8,14 @@
 #include <string.h> /* for memset() */ 
 #include <unistd.h> /* for close() */
 
-pa_value_t* _socket(pa_value_t* args, pa_value_t* kwargs) {
+pa_value_t* _socket(pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
     int sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     int optval = 1;
     setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
     return pa_new_integer(sock);
 }
 
-pa_value_t* _connect(pa_value_t* args, pa_value_t* kwargs) {
+pa_value_t* _connect(pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
     pa_value_t* socket = pa_get_argument(args, kwargs, 0, "socket", pa_new_nil());
     pa_value_t* host = pa_get_argument(args, kwargs, 1, "host", pa_new_nil());
     pa_value_t* port = pa_get_argument(args, kwargs, 2, "port", pa_new_nil());
@@ -32,7 +32,7 @@ pa_value_t* _connect(pa_value_t* args, pa_value_t* kwargs) {
     return pa_new_integer(connect(sock, (struct sockaddr*)&addr, sizeof(addr)));
 }
 
-pa_value_t* _read(pa_value_t* args, pa_value_t* kwargs) {
+pa_value_t* _read(pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
     pa_value_t* socket = pa_get_argument(args, kwargs, 0, "socket", pa_new_nil());
 
     char* buffer = (char*)malloc(1024);
@@ -42,7 +42,7 @@ pa_value_t* _read(pa_value_t* args, pa_value_t* kwargs) {
     return pa_new_string(string(buffer));  
 }
 
-pa_value_t* _write(pa_value_t* args, pa_value_t* kwargs) {
+pa_value_t* _write(pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
     pa_value_t* socket = pa_get_argument(args, kwargs, 0, "socket", pa_new_nil());
     pa_value_t* _buffer = pa_get_argument(args, kwargs, 1, "buffer", pa_new_nil());
 
@@ -54,7 +54,7 @@ pa_value_t* _write(pa_value_t* args, pa_value_t* kwargs) {
     return pa_new_nil();
 }
 
-pa_value_t* _listen(pa_value_t* args, pa_value_t* kwargs) {
+pa_value_t* _listen(pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
     pa_value_t* socket = pa_get_argument(args, kwargs, 0, "socket", pa_new_nil());
     pa_value_t* host= pa_get_argument(args, kwargs, 1, "host", pa_new_nil());
     pa_value_t* port = pa_get_argument(args, kwargs, 2, "port", pa_new_nil());
@@ -71,13 +71,13 @@ pa_value_t* _listen(pa_value_t* args, pa_value_t* kwargs) {
     return pa_new_integer(listen(sock, 1024));
 }
 
-pa_value_t* _accept(pa_value_t* args, pa_value_t* kwargs) {
+pa_value_t* _accept(pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
     pa_value_t* socket = pa_get_argument(args, kwargs, 0, "socket", pa_new_nil());
     int sock = socket->value.i32;
     return pa_new_integer(accept(sock, NULL, NULL));
 }
 
-pa_value_t* _close(pa_value_t* args, pa_value_t* kwargs) {
+pa_value_t* _close(pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
     pa_value_t* socket = pa_get_argument(args, kwargs, 0, "socket", pa_new_nil());
     int sock = socket->value.i32;
 

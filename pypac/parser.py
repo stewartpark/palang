@@ -97,11 +97,11 @@ expr << Group(operatorPrecedence(expr_literal, [
 
 # Statements
 stat_class_constructor = Group(Suppress("constructor") + Group(def_func_args) + Group(def_stat_block)).setParseAction(lambda t: ["stat_class_constructor", t[0]])
-stat_class_deconstructor = Group(Suppress("deconstructor") + Group(def_func_args) + Group(def_stat_block)).setParseAction(lambda t: ["stat_class_deconstructor", t[0]])
+stat_class_destructor = Group(Suppress("destructor") + Group(def_func_args) + Group(def_stat_block)).setParseAction(lambda t: ["stat_class_destructor", t[0]])
 stat_class_method = Group(Suppress("method") + Group(IDENT) + Group(def_func_args) + Group(def_stat_block)).setParseAction(lambda t: ["stat_class_method", t[0]])
 stat_class_operator = Group(Suppress("operator") + Group(oneOf("* / mod + - == != > >= < <= -> <- not and or & ? ! getattr setattr getitem setitem")) + Group(def_func_args) + Group(def_stat_block)).setParseAction(lambda t: ["stat_class_operator", t[0]])
 stat_class_property = Group(Suppress("property") + Group(IDENT) + Group(def_stat_block)).setParseAction(lambda t: ["stat_class_property", t[0]])
-stat_def_class = Group(Suppress("class") + Group(IDENT) + LBRACE + Group(ZeroOrMore(Group(stat_class_method|stat_class_operator|stat_class_property|stat_class_constructor|stat_class_deconstructor))) + RBRACE).setParseAction(lambda t: ["stat_def_class", t[0]])
+stat_def_class = Group(Suppress("class") + Group(IDENT) + LBRACE + Group(ZeroOrMore(Group(stat_class_method|stat_class_operator|stat_class_property|stat_class_constructor|stat_class_destructor))) + RBRACE).setParseAction(lambda t: ["stat_def_class", t[0]])
 
 expr_stat_block = ((COMMA + Group(stat))|(LBRACE + ZeroOrMore(Group(stat)) + RBRACE))
 stat_if = Group(Suppress("if") + Group(Group(expr) + Group(expr_stat_block)) + ZeroOrMore(Group(Suppress("elif") + Group(expr) + Group(expr_stat_block))) + Optional(Group(Suppress("else") + Group(expr_stat_block)))).setParseAction(lambda t: ["stat_if", t[0]])

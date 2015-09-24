@@ -498,7 +498,7 @@ class Compiler:
             self._expr_lvalue_predefine([ast[1][0]])
 
             _constructor = None
-            _deconstructor = None
+            _destructor = None
             _members = {}
             _operators = {}
             for x in ast[1][1]:
@@ -518,7 +518,7 @@ class Compiler:
                         src += self._stat(s)
                     self.leave_func()
                     _constructor = self.generator.literal_func(src)
-                elif x[0] == 'stat_class_deconstructor': 
+                elif x[0] == 'stat_class_destructor': 
                     src = ""
                     args = x[1][0]
                     self.enter_func()
@@ -533,7 +533,7 @@ class Compiler:
                     for s in x[1][1]:
                         src += self._stat(s)
                     self.leave_func()
-                    _deconstructor = self.generator.literal_func(src)
+                    _destructor = self.generator.literal_func(src)
                 elif x[0] == 'stat_class_method': 
                     src = ""
                     args = x[1][1]
@@ -577,8 +577,8 @@ class Compiler:
             cls_src += self._expr_lvalue_assignment([ast[1][0]], self.generator.literal_cls())
             if _constructor is not None:
                 cls_src += self.generator.define_operator_in_class(self.generator.var_name(ast[1][0][1]), "constructor", _constructor)
-            if _deconstructor is not None:
-                cls_src += self.generator.define_operator_in_class(self.generator.var_name(ast[1][0][1]), "deconstructor", _deconstructor)
+            if _destructor is not None:
+                cls_src += self.generator.define_operator_in_class(self.generator.var_name(ast[1][0][1]), "destructor", _destructor)
             for k in _operators:
                 v = _operators[k]
                 cls_src += self.generator.define_operator_in_class(self.generator.var_name(ast[1][0][1]), k, v)

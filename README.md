@@ -12,7 +12,7 @@ Currently, the only working implentation of Pa is Pypac, which is in the current
  - Initial implementation that is written in Python to bootstrap the language.
  - A few intrinsic funtions(print, input, len, range)
  - Binary level interface to import/export
- - Several libraries to make the language a bit more useful in this stage
+ - Several libraries to make the language a bit more useful at this stage
     - tcp: TCP socket library
     - file: File I/O
  - import/export statements
