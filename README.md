@@ -7,7 +7,7 @@ Currently, the only working implentation of Pa is Pypac, which is in the current
 
 ![Screencast](https://raw.githubusercontent.com/stewartpark/palang/master/misc/demo.gif)
 
-### Works done so far
+### Work done so far
 
  - Initial implementation that is written in Python to bootstrap the language.
  - A few intrinsic funtions(print, input, len, range)
