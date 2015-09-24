@@ -1,7 +1,7 @@
 Pa Language
 ===========
 
-Pa Language is a toy compiled language written in Python, C++11.
+<img src="https://raw.githubusercontent.com/stewartpark/palang/master/misc/logo.png" height="40" alt="" align="middle"/> Pa Language is a toy compiled language written in Python, C++11.
 
 ![Screencast](https://raw.githubusercontent.com/stewartpark/palang/master/misc/demo.gif)
 
