@@ -2,11 +2,11 @@ class CppGenerator:
     HEADER = "/* Automatically compiled from Pa language */\n#include <palang.h>"
     ENTRYPOINT = "int main(int argc,char**argv,char**env){PA_ENTER(argc,argv,env);return PA_LEAVE(PA_INIT());}"
     def finalize(self, code, has_entrypoint=True):
-        return "%s\nextern \"C\" pa_value_t* PA_INIT(){INTRINSICS();%s;};%s" % (CppGenerator.HEADER, code, CppGenerator.ENTRYPOINT if has_entrypoint else "")
+        return "%s\nextern \"C\" pa_value_t* PA_INIT(){pa_value_t* _this=pa_new_nil();INTRINSICS();%s;};%s" % (CppGenerator.HEADER, code, CppGenerator.ENTRYPOINT if has_entrypoint else "")
     def cfunc_call(self, name, *args):
         return name + "(" + (",".join(args)) + ")"
-    def func_call(self, name, *args, **kwargs):
-        return self.cfunc_call("pa_function_call", name, self.literal_list(*args), self.literal_dict(*[self.literal_dict_kw(x,y) for x,y in kwargs]))
+    def func_call(self, name, this="_this", *args, **kwargs):
+        return self.cfunc_call("pa_function_call", name, self.literal_list(*args), self.literal_dict(*[self.literal_dict_kw(x,y) for x,y in kwargs]), this)
     def literal_nil(self):
         return self.cfunc_call("pa_new_nil")
     def literal_bool(self, v):
@@ -18,15 +18,23 @@ class CppGenerator:
     def literal_str(self, v):
         return self.cfunc_call("pa_new_string", "\"" + v + "\"")
     def literal_func(self, *args):
-        return self.cfunc_call("pa_new_function", "[=](pa_value_t* args, pa_value_t* kwargs){" + ("".join(args)) + "}")
+        return self.cfunc_call("pa_new_function", "[=](pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) -> pa_value_t* {" + ("".join(args)) + "}")
     def literal_list(self, *args):
         return self.cfunc_call("pa_new_list", *args)
     def literal_dict_kv(self, k, v):
         return self.cfunc_call("pa_new_dictionary_kv", k, v)
     def literal_dict(self, *args):
         return self.cfunc_call("pa_new_dictionary", *args)
+    def literal_obj(self, class_name):
+        return self.cfunc_call("pa_new_object", class_name)
+    def literal_cls(self):
+        return self.cfunc_call("pa_new_class")
     def literal_cstr(self, v):
         return "\"" + v + "\""
+    def define_member_in_class(self, n, k, v):
+        return "(" + n + ")->value.cls->set_member(" + self.literal_cstr(k) + "," + v + ");"
+    def define_operator_in_class(self, n, k, v):
+        return "(" + n + ")->value.cls->set_operator(" + self.literal_cstr(k) + "," + v + ");"
     def evaluate_multiline(self, *args):
         return "([=]() -> pa_value_t* {" + ("".join(args)) + "})()"
     def op(self, op, a, b=None, c=None):
@@ -105,7 +113,7 @@ class Compiler:
         self.root = ast
         self.exports = exports
         self.imports = imports
-        self.intrinsics = intrinsics
+        self.intrinsics = intrinsics + ["this"]
         self.is_library = is_library
     def append(self, src):
         self.src += src
@@ -190,6 +198,7 @@ class Compiler:
                 'stat_continue': self._stat_continue,
                 'stat_if': self._stat_if,
                 'stat_ret': self._stat_ret,
+                'stat_def_class': self._stat_def_class,
                 'stat_import': self._stat_import,
                 'stat_export': self._stat_export
             }[stat_name]
@@ -459,17 +468,22 @@ class Compiler:
                 raise Exception("No such variable in the scope: " + var_name)
         else:
             src = ""
+            _this = ["_this"]
             i = 0
             while True:
                 if ast[i][0] == 'IDENT':
+                    _this.append("_this")
                     src += self._expr_rvalue([ast[i]])
                 elif ast[i][0] == 'expr_rvalue_item':
+                    _this.append(src)
                     src = self.generator.op("getitem", src, self._expr(ast[i][1]))
                 elif ast[i][0] == 'expr_rvalue_attr':
+                    _this.append(src)
                     src = self.generator.op("getattr", src, self.generator.literal_cstr(ast[i][1][1]))
                 elif ast[i][0] == 'expr_rvalue_call':
+                    _this.append(src)
                     fargs = ast[i][1]
-                    src = self.generator.func_call(src, 
+                    src = self.generator.func_call(src, _this[-2], 
                             *[self._expr(x) for x in filter(lambda x: x[0] == 'expr', fargs)], 
                             **{x[1][0][1]: self._expr(x[1][1]) for x in filter(lambda x: x[0] == 'expr_func_kwarg', fargs)}
                     )
@@ -479,6 +493,101 @@ class Compiler:
                 if len(ast) <= i:
                     break
             return src
+    def _stat_def_class(self, ast):
+        if ast[0] == 'stat_def_class':
+            self._expr_lvalue_predefine([ast[1][0]])
+
+            _constructor = None
+            _deconstructor = None
+            _members = {}
+            _operators = {}
+            for x in ast[1][1]:
+                if x[0] == 'stat_class_constructor': 
+                    src = ""
+                    args = x[1][0]
+                    self.enter_func()
+                    for i, y in enumerate(args):
+                        var_name = y[1][0][1]
+                        if len(y[1]) == 1:
+                            df = self.generator.literal_nil() 
+                        else:
+                            df = self._expr(y[1][1])
+                        src += self.generator.define_param(var_name, i, var_name, df)
+                        self.define(var_name, need_to_be_declared=False)
+                    for s in x[1][1]:
+                        src += self._stat(s)
+                    self.leave_func()
+                    _constructor = self.generator.literal_func(src)
+                elif x[0] == 'stat_class_deconstructor': 
+                    src = ""
+                    args = x[1][0]
+                    self.enter_func()
+                    for i, y in enumerate(args):
+                        var_name = y[1][0][1]
+                        if len(y[1]) == 1:
+                            df = self.generator.literal_nil() 
+                        else:
+                            df = self._expr(y[1][1])
+                        src += self.generator.define_param(var_name, i, var_name, df)
+                        self.define(var_name, need_to_be_declared=False)
+                    for s in x[1][1]:
+                        src += self._stat(s)
+                    self.leave_func()
+                    _deconstructor = self.generator.literal_func(src)
+                elif x[0] == 'stat_class_method': 
+                    src = ""
+                    args = x[1][1]
+                    self.enter_func()
+                    for i, y in enumerate(args):
+                        var_name = y[1][0][1]
+                        if len(y[1]) == 1:
+                            df = self.generator.literal_nil() 
+                        else:
+                            df = self._expr(y[1][1])
+                        src += self.generator.define_param(var_name, i, var_name, df)
+                        self.define(var_name, need_to_be_declared=False)
+                    for s in x[1][2]:
+                        src += self._stat(s)
+                    self.leave_func()
+                    _members[x[1][0][1]] = self.generator.literal_func(src)
+                elif x[0] == 'stat_class_property': 
+                    self.enter_func()
+                    n = x[1][0][1]
+                    _members[n] = self.generator.evaluate_multiline(*[self._stat(x) for x in x[1][1]])
+                    self.leave_func()
+                elif x[0] == 'stat_class_operator':
+                    src = ""
+                    args = x[1][1]
+                    self.enter_func()
+                    for i, y in enumerate(args):
+                        var_name = y[1][0][1]
+                        if len(y[1]) == 1:
+                            df = self.generator.literal_nil() 
+                        else:
+                            df = self._expr(y[1][1])
+                        src += self.generator.define_param(var_name, i, var_name, df)
+                        self.define(var_name, need_to_be_declared=False)
+                    for s in x[1][2]:
+                        src += self._stat(s)
+                    self.leave_func()
+                    _operators[x[1][0][0]] = self.generator.literal_func(src)
+            cls_src = ""
+            for x in self.get_reset_new_vars():
+                cls_src += self.generator.define_var(x)
+            cls_src += self._expr_lvalue_assignment([ast[1][0]], self.generator.literal_cls())
+            if _constructor is not None:
+                cls_src += self.generator.define_operator_in_class(self.generator.var_name(ast[1][0][1]), "constructor", _constructor)
+            if _deconstructor is not None:
+                cls_src += self.generator.define_operator_in_class(self.generator.var_name(ast[1][0][1]), "deconstructor", _deconstructor)
+            for k in _operators:
+                v = _operators[k]
+                cls_src += self.generator.define_operator_in_class(self.generator.var_name(ast[1][0][1]), k, v)
+            for k in _members:
+                v = _members[k]
+                cls_src += self.generator.define_member_in_class(self.generator.var_name(ast[1][0][1]), k, v)
+            return cls_src
+        else:
+            raise Exception("Semantic error")
               
 
          

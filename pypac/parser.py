@@ -96,10 +96,12 @@ expr << Group(operatorPrecedence(expr_literal, [
 ])).setParseAction(lambda t: ["expr", t[0]])
 
 # Statements
+stat_class_constructor = Group(Suppress("constructor") + Group(def_func_args) + Group(def_stat_block)).setParseAction(lambda t: ["stat_class_constructor", t[0]])
+stat_class_deconstructor = Group(Suppress("deconstructor") + Group(def_func_args) + Group(def_stat_block)).setParseAction(lambda t: ["stat_class_deconstructor", t[0]])
 stat_class_method = Group(Suppress("method") + Group(IDENT) + Group(def_func_args) + Group(def_stat_block)).setParseAction(lambda t: ["stat_class_method", t[0]])
-stat_class_operator = Group(Suppress("operator") + Group(oneOf("* / mod + - == != > >= < <= -> <- not and or & ? ! getattr setattr getitem setitem")) + def_func_args + def_stat_block).setParseAction(lambda t: ["stat_class_operator", t[0]])
+stat_class_operator = Group(Suppress("operator") + Group(oneOf("* / mod + - == != > >= < <= -> <- not and or & ? ! getattr setattr getitem setitem")) + Group(def_func_args) + Group(def_stat_block)).setParseAction(lambda t: ["stat_class_operator", t[0]])
 stat_class_property = Group(Suppress("property") + Group(IDENT) + Group(def_stat_block)).setParseAction(lambda t: ["stat_class_property", t[0]])
-stat_class = Group(Suppress("class") + Group(IDENT) + LBRACE + Group(ZeroOrMore(Group(stat_class_method|stat_class_operator|stat_class_property))) + RBRACE).setParseAction(lambda t: ["stat_class", t[0]])
+stat_def_class = Group(Suppress("class") + Group(IDENT) + LBRACE + Group(ZeroOrMore(Group(stat_class_method|stat_class_operator|stat_class_property|stat_class_constructor|stat_class_deconstructor))) + RBRACE).setParseAction(lambda t: ["stat_def_class", t[0]])
 
 expr_stat_block = ((COMMA + Group(stat))|(LBRACE + ZeroOrMore(Group(stat)) + RBRACE))
 stat_if = Group(Suppress("if") + Group(Group(expr) + Group(expr_stat_block)) + ZeroOrMore(Group(Suppress("elif") + Group(expr) + Group(expr_stat_block))) + Optional(Group(Suppress("else") + Group(expr_stat_block)))).setParseAction(lambda t: ["stat_if", t[0]])
@@ -112,7 +114,7 @@ stat_break = Group(Suppress("break")).setParseAction(lambda t: ["stat_break"])
 stat_continue = Group(Suppress("continue")).setParseAction(lambda t: ["stat_continue"])
 stat_import = Group(Suppress("import") + Group(Group(PACKAGE_NAME) + Optional(Group(Suppress("as") + IDENT)))).setParseAction(lambda t: ["stat_import", t[0]])
 stat_export = Group(Suppress("export") + Group(Group(IDENT) + Optional(Group(Suppress("as") + IDENT)))).setParseAction(lambda t: ["stat_export", t[0]])
-stat << Group((stat_class | stat_import | stat_export | stat_if | stat_for | stat_while | stat_break | stat_continue | stat_assign | stat_ret | stat_expr) + Optional(NEWLINE)).setParseAction(lambda t: ["stat", t[0]])
+stat << Group((stat_def_class | stat_import | stat_export | stat_if | stat_for | stat_while | stat_break | stat_continue | stat_assign | stat_ret | stat_expr) + Optional(NEWLINE)).setParseAction(lambda t: ["stat", t[0]])
 
 # Program
 program = ZeroOrMore(Group(stat)).setParseAction(lambda t: ["program", t])

@@ -56,11 +56,12 @@ struct pa_value_t {
         void* ptr; 
         //list<pa_value*>* list;
         //map<string,pa_value*>* dict;
-        function<pa_value_t*(pa_value_t*,pa_value_t*)>* func;
+        function<pa_value_t*(pa_value_t*,pa_value_t*,pa_value_t*)>* func;
         pa_class_data* cls;
         pa_object_data* obj;
     } value;
     enum pa_type_t type;
+    pa_value_t* _this;
 };
 
 class pa_class_data {
@@ -184,9 +185,9 @@ inline pa_value_t* pa_new_string(string str) {
     return r;
 }
 
-inline pa_value_t* pa_new_function(function<pa_value_t*(pa_value_t*,pa_value_t*)> f) {
+inline pa_value_t* pa_new_function(function<pa_value_t*(pa_value_t*,pa_value_t*,pa_value_t*)> f) {
     pa_value_t *r = new pa_value_t;
-    function<pa_value_t*(pa_value_t*,pa_value_t*)>* ff = new function<pa_value_t*(pa_value_t*,pa_value_t*)>;
+    function<pa_value_t*(pa_value_t*,pa_value_t*,pa_value_t*)>* ff = new function<pa_value_t*(pa_value_t*,pa_value_t*,pa_value_t*)>;
     *ff = f;
     r->value.func = ff;
     r->type = pa_function;
@@ -220,15 +221,23 @@ inline pa_value_t* pa_new_object(pa_class_data* _class) {
 
 // Function invoke
 
-inline pa_value_t* pa_function_call(pa_value_t* func, pa_value_t* args, pa_value_t* kwargs) {
+inline pa_value_t* pa_function_call(pa_value_t* func, pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
     
-    if(func->type != pa_function) {
+    if(func->type == pa_function) {
+        return (*(func->value.func))(args, kwargs, _this);
+    } else if(func->type == pa_class) {
+        pa_value_t* new_obj = pa_new_object(func->value.cls);
+        pa_value_t* ret = func->value.cls->get_operator("constructor");
+        if(ret) {
+            pa_function_call(ret, args, kwargs, new_obj); 
+        }
+        return new_obj;
+    } else {
         printf("func_type: %d\n", func->type);
-        printf("Runtime Error: calling a non-function value.\n");
+        printf("Runtime Error: calling a non-callable value.\n");
         exit(1);
     } 
 
-    return (*(func->value.func))(args, kwargs);
 }
 
 pa_value_t* pa_get_argument(pa_value_t *args, pa_value_t *kwargs, const size_t nth, const string name, pa_value_t *def) {
@@ -237,7 +246,7 @@ pa_value_t* pa_get_argument(pa_value_t *args, pa_value_t *kwargs, const size_t n
     
     if(_kwargs.count(name)) {
         return _kwargs[name];
-    } else if(_args.size()-1 >= nth) {
+    } else if(_args.size() >= nth+1) {
         list<pa_value_t*>::iterator it = _args.begin();
         advance(it, nth);
         return *it;
@@ -337,14 +346,11 @@ inline pa_value_t* pa_operator_setattr(pa_value_t* a, string b, pa_value_t* c) {
             if(!ret) {
                 ret = a->value.obj->get_class()->get_operator("setattr");
                 if(ret) {
-                    ret = pa_function_call(ret, pa_new_list(a, pa_new_string(b), c), pa_new_dictionary());
-                } else {
-                    printf("Runtime Error: no such attribute/method.\n");
-                    exit(1); 
-                }
-            } else {
-                a->value.obj->set_member(b, c);
-            }
+                    ret = pa_function_call(ret, pa_new_list(a, pa_new_string(b), c), pa_new_dictionary(), a);
+                    return ret;
+                } 
+            } 
+            a->value.obj->set_member(b, c);
             return ret;
         default:
             goto type_mismatch;
@@ -361,7 +367,7 @@ inline pa_value_t* pa_operator_getattr(pa_value_t* a, string b) {
             if(!ret) {
                 ret = a->value.obj->get_class()->get_operator("getattr");
                 if(ret) {
-                    ret = pa_function_call(ret, pa_new_list(a, pa_new_string(b)), pa_new_dictionary());
+                    ret = pa_function_call(ret, pa_new_list(a, pa_new_string(b)), pa_new_dictionary(), a);
                 } else {
                     printf("Runtime Error: no such attribute/method.\n");
                     exit(1); 
@@ -612,7 +618,7 @@ inline pa_value_t* pa_operator_right(pa_value_t* a, pa_value_t* b) {
                     l1 = PV2LIST(a);
                     l2 = PV2LIST(n);
                     for(it = l1->begin(); it != l1->end(); ++it){
-                        l2->push_back(pa_function_call(b, pa_new_list(*it), pa_new_dictionary()));
+                        l2->push_back(pa_function_call(b, pa_new_list(*it), pa_new_dictionary(), a));
                     }
                     return n;
                 default:
@@ -710,8 +716,8 @@ inline pa_value_t* pa_import(string name) {
         pa_value_t* mod = mod_init();
 
         pa_value_t* mod_class = pa_new_class();
-        mod_class->value.cls->set_operator("getattr", pa_new_function([=](pa_value_t* args, pa_value_t* kwargs) -> pa_value_t* {
-            pa_value_t *_this = pa_get_argument(args, kwargs, 0, "", pa_new_nil());
+        mod_class->value.cls->set_operator("getattr", pa_new_function([=](pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) -> pa_value_t* {
+            pa_value_t *__this = pa_get_argument(args, kwargs, 0, "", pa_new_nil());
             pa_value_t *attr_name = pa_get_argument(args, kwargs, 1, "", pa_new_nil());
             pa_value_t* attr = pa_operator_getitem(mod, attr_name); 
             if(attr){ 
@@ -744,7 +750,7 @@ inline int PA_LEAVE(pa_value_t *ret) {
     pa_value_t *_range; \
     pa_value_t *_input; \
     pa_value_t *_len; \
-    _range = pa_new_function([](pa_value_t* args, pa_value_t* kwargs) -> pa_value_t* { \
+    _range = pa_new_function([](pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) -> pa_value_t* { \
         pa_value_t *start = pa_get_argument(args, kwargs, 0, "start", pa_new_nil()); \
         pa_value_t *end = pa_get_argument(args, kwargs, 1, "end", pa_new_nil()); \
         pa_value_t *step = pa_get_argument(args, kwargs, 2, "step", pa_new_integer(1)); \
@@ -761,7 +767,7 @@ inline int PA_LEAVE(pa_value_t *ret) {
             exit(1); \
         } \
     }); \
-    _print = pa_new_function([](pa_value_t* args, pa_value_t* kwargs) -> pa_value_t* { \
+    _print = pa_new_function([](pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) -> pa_value_t* { \
         list<pa_value_t*> *_args = PV2LIST(args); \
         list<pa_value_t*>::iterator it; \
         for(it = _args->begin(); it != _args->end(); ++it) { \
@@ -787,13 +793,13 @@ inline int PA_LEAVE(pa_value_t *ret) {
         } \
         return pa_new_nil(); \
     }); \
-    _input = pa_new_function([](pa_value_t* args, pa_value_t* kwargs) -> pa_value_t* { \
+    _input = pa_new_function([](pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) -> pa_value_t* { \
         long long int N; \
         register int t = scanf("%lld", &N); \
         pa_value_t* n = pa_new_integer(N); \
         return n; \
     }); \
-    _len = pa_new_function([](pa_value_t* args, pa_value_t* kwargs) -> pa_value_t* { \
+    _len = pa_new_function([](pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) -> pa_value_t* { \
         pa_value_t *o = pa_get_argument(args, kwargs, 0, "object", pa_new_nil()); \
         switch(o->type) {\
             case pa_list: \
