@@ -1,0 +1,20 @@
+class Adder {
+    constructor(base) {
+        # A number to add to the result
+        this.base = base
+    }
+
+    method add(x, y) = this.base + x + y
+    method add_without_base(x, y) {
+        = x + y
+    }
+}
+
+
+obj = Adder(10)
+
+# Should be 10 + 1 + 2 = 13
+print(obj.add(1, 2), "\n")
+
+# Should be 10 + 20 = 30
+print(obj.add_without_base(10, 20), "\n")
