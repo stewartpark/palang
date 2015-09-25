@@ -1,0 +1,12 @@
+import paw
+
+server = paw.HTTPServer()
+router = server.router
+
+router -> ["/", paw.serveStaticFile("index.html")]
+router -> ["/test", func(req, res) {
+    res.write("Internal Error!")
+    res.status_internal_error()  
+}]
+
+server.listen()

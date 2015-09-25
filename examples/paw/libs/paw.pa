@@ -1,0 +1,122 @@
+import string
+import tcp
+import file
+
+export HTTPServer
+export HTTPRouter
+export serveStaticFile
+
+serveStaticFile(filename) {
+    = func(req,res) {
+        f = file.open("./www/" + filename)
+        buf = file.read(f)
+        file.close(f)
+        res.write(buf)
+    }
+}
+
+class HTTPResponse
+{
+    constructor() { 
+        this.response_code = "200 OK"
+        this.content_type = "text/html"
+        this.buffer = ""
+    }
+
+    method set_content_type(type) {
+        this.content_type = type
+    }
+
+    method status_ok() {
+        this.response_code = "200 OK"
+    }
+
+    method status_not_found() {
+        this.response_code = "404 NOT FOUND"
+    }
+
+    method status_internal_error() {
+        this.response_code = "500 INTERNAL ERROR"
+    }
+
+    method write(data) {
+        this.buffer = this.buffer + data + "\n" 
+    }
+
+    method toString() {
+        =   "HTTP/1.1 " + this.response_code + "\n" +
+            "Content-Type: " + this.content_type + "\n\n" +
+            this.buffer
+    }
+}
+
+class HTTPRequest {
+    constructor(pkt) {
+        _pkt = string.split(pkt, "\n")
+        _first = string.split(_pkt[0], " ")
+        this.verb = _first[0]
+        this.endpoint = _first[1]
+    }
+}
+
+class HTTPRouter {
+    property routes = []
+
+    method register_route(endpoint, f) {
+        this.routes = this.routes + [[endpoint, f]]
+    }
+
+    operator -> (n) {
+        this.register_route(n[0], n[1])
+        = this
+    }
+
+    method run_handlers(endpoint, req, res) {
+        for x in this.routes {
+            if string.startsWith(x[0], endpoint) {
+                = x[1](req, res)
+            }
+        }
+        res.status_not_found()
+    }
+}
+
+class HTTPServer {
+    property router = nil
+    property running = yes
+
+    constructor (port=3000) {
+        this.port = port
+        this.router = HTTPRouter()
+    }
+
+    method stop() {
+        this.running = no
+    }
+
+    method listen() {
+        server = tcp.socket()
+        tcp.listen(server, "0.0.0.0", this.port)
+        print("Listening on http://0.0.0.0:", this.port, "\n")
+        while this.running {
+            client = tcp.accept(server)
+
+            # Get packet from client
+            pkt = tcp.read(client)
+            
+            # Make request, response objects
+            req = HTTPRequest(pkt)
+            res = HTTPResponse()
+            
+            print(req.verb, " ", req.endpoint, " => ")
+            this.router.run_handlers(req.endpoint, req, res)
+            print(res.response_code, "\n")            
+ 
+            # build response packet
+            tcp.write(client, res.toString())
+            tcp.close(client)
+        }
+        tcp.close(server)
+    }
+}
+
