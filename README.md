@@ -45,7 +45,7 @@ $ ./build_libs.sh
 
  - PAW (example web framework)
     - [app.pa](https://github.com/stewartpark/palang/blob/master/examples/paw/app.pa)
-    - [paw.pa](https://github.com/stewartpark/palang/blob/master/examples/paw/paw.pa)
+    - [paw.pa](https://github.com/stewartpark/palang/blob/master/examples/paw/libs/paw.pa)
  - libsample (example library)
     - [libsample.pa](https://github.com/stewartpark/palang/blob/master/examples/libsample.pa)
     - [import_test.pa](https://github.com/stewartpark/palang/blob/master/examples/import_test.pa)
