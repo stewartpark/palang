@@ -83,6 +83,13 @@ class pa_object_data {
         pa_object_data() {}
         pa_object_data(pa_class_data* _class) { this->_class = _class; }
         pa_class_data* get_class() { return this->_class; }
+        pa_value_t* get_operator(string name) { 
+            if(this->_class) {
+                return this->_class->get_operator(name);
+            } else {
+                return NULL;
+            }
+        }
         void set_member(string name, pa_value_t* value) { this->members[name] = value; }
         pa_value_t* get_member(string name) { 
             if(this->members[name]){
@@ -265,6 +272,7 @@ inline pa_value_t* pa_operator_setitem(pa_value_t* a, pa_value_t* b, pa_value_t*
     list<pa_value_t*>* l;
     list<pa_value_t*>::iterator it;
     map<string,pa_value_t*>* m;
+    pa_value_t* n;
     string* s;
 
     switch(a->type) {
@@ -285,6 +293,13 @@ inline pa_value_t* pa_operator_setitem(pa_value_t* a, pa_value_t* b, pa_value_t*
         case pa_dictionary:
             m = PV2MAP(a);
             return (*m)[pa_operator_hash(b)] = c;
+        case pa_object:
+            n = a->value.obj->get_operator("setitem");
+            if(n) {
+                return pa_function_call(n, pa_new_list(b, c), pa_new_dictionary(), a);
+            } else {
+                goto type_mismatch;
+            }
         default:
             goto type_mismatch;
     }
@@ -298,6 +313,7 @@ inline pa_value_t* pa_operator_getitem(pa_value_t* a, pa_value_t* b) {
     list<pa_value_t*>::iterator it;
     map<string,pa_value_t*>* m;
     string* s;
+    pa_value_t* n;
 
     switch(a->type) {
         case pa_string:
@@ -330,6 +346,13 @@ inline pa_value_t* pa_operator_getitem(pa_value_t* a, pa_value_t* b) {
         case pa_dictionary:
             m = PV2MAP(a);
             return (*m)[pa_operator_hash(b)];
+        case pa_object:
+            n = a->value.obj->get_operator("getitem");
+            if(n) {
+                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+            } else {
+                goto type_mismatch;
+            }
         default:
             goto type_mismatch;
     }
@@ -418,6 +441,13 @@ inline pa_value_t* pa_operator_add(pa_value_t* a, pa_value_t* b) {
                 default:
                    goto type_mismatch;
             }
+        case pa_object:
+            n = a->value.obj->get_operator("+");
+            if(n) {
+                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+            } else {
+                goto type_mismatch;
+            }
         default:
             goto type_mismatch; 
     }
@@ -427,6 +457,7 @@ type_mismatch:
 }
 
 inline pa_value_t* pa_operator_subtract(pa_value_t *a, pa_value_t *b) {
+    pa_value_t* n;
     switch(a->type) {
         case pa_integer:
             switch(b->type) {
@@ -434,6 +465,13 @@ inline pa_value_t* pa_operator_subtract(pa_value_t *a, pa_value_t *b) {
                     return pa_new_integer(a->value.i64 - b->value.i64);
                 default:
                     goto type_mismatch;
+            }
+        case pa_object:
+            n = a->value.obj->get_operator("-");
+            if(n) {
+                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+            } else {
+                goto type_mismatch;
             }
         default:
             goto type_mismatch; 
@@ -444,6 +482,7 @@ type_mismatch:
 }
 
 inline pa_value_t* pa_operator_multiply(pa_value_t* a, pa_value_t* b) {
+    pa_value_t* n;
     switch(a->type) {
         case pa_integer:
             switch(b->type) {
@@ -451,6 +490,13 @@ inline pa_value_t* pa_operator_multiply(pa_value_t* a, pa_value_t* b) {
                     return pa_new_integer(a->value.i64 * b->value.i64);
                 default:
                     goto type_mismatch;
+            }
+        case pa_object:
+            n = a->value.obj->get_operator("*");
+            if(n) {
+                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+            } else {
+                goto type_mismatch;
             }
         default:
             goto type_mismatch; 
@@ -461,6 +507,7 @@ type_mismatch:
 }
 
 inline pa_value_t* pa_operator_divide(pa_value_t* a, pa_value_t* b) {
+    pa_value_t* n;
     switch(a->type) {
         case pa_integer:
             switch(b->type) {
@@ -468,6 +515,13 @@ inline pa_value_t* pa_operator_divide(pa_value_t* a, pa_value_t* b) {
                     return pa_new_integer(a->value.i64 / b->value.i64);
                 default:
                     goto type_mismatch;
+            }
+        case pa_object:
+            n = a->value.obj->get_operator("/");
+            if(n) {
+                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+            } else {
+                goto type_mismatch;
             }
         default:
             goto type_mismatch; 
@@ -478,6 +532,7 @@ type_mismatch:
 }
 
 inline pa_value_t* pa_operator_modulo(pa_value_t* a, pa_value_t* b) {
+    pa_value_t* n;
     switch(a->type) {
         case pa_integer:
             switch(b->type) {
@@ -485,6 +540,13 @@ inline pa_value_t* pa_operator_modulo(pa_value_t* a, pa_value_t* b) {
                     return pa_new_integer(a->value.i64 % b->value.i64);
                 default:
                     goto type_mismatch;
+            }
+        case pa_object:
+            n = a->value.obj->get_operator("mod");
+            if(n) {
+                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+            } else {
+                goto type_mismatch;
             }
         default:
             goto type_mismatch; 
@@ -496,6 +558,7 @@ type_mismatch:
 
 
 inline pa_value_t* pa_operator_eq(pa_value_t* a, pa_value_t* b) {
+    pa_value_t* n;
     switch(a->type) {
         case pa_integer:
             switch(b->type) {
@@ -511,6 +574,13 @@ inline pa_value_t* pa_operator_eq(pa_value_t* a, pa_value_t* b) {
                 default:
                     goto type_mismatch;
             }
+        case pa_object:
+            n = a->value.obj->get_operator("==");
+            if(n) {
+                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+            } else {
+                goto type_mismatch;
+            }
         default:
             goto type_mismatch; 
     }
@@ -520,6 +590,7 @@ type_mismatch:
 }
 
 inline pa_value_t* pa_operator_neq(pa_value_t* a, pa_value_t* b) {
+    pa_value_t* n;
     switch(a->type) {
         case pa_integer:
             switch(b->type) {
@@ -535,6 +606,13 @@ inline pa_value_t* pa_operator_neq(pa_value_t* a, pa_value_t* b) {
                 default:
                     goto type_mismatch;
             }
+        case pa_object:
+            n = a->value.obj->get_operator("!=");
+            if(n) {
+                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+            } else {
+                goto type_mismatch;
+            }
         default:
             goto type_mismatch; 
     }
@@ -544,6 +622,7 @@ type_mismatch:
 }
 
 inline pa_value_t* pa_operator_gt(pa_value_t* a, pa_value_t* b) {
+    pa_value_t* n;
     switch(a->type) {
         case pa_integer:
             switch(b->type) {
@@ -551,6 +630,13 @@ inline pa_value_t* pa_operator_gt(pa_value_t* a, pa_value_t* b) {
                     return pa_new_boolean(a->value.i64 > b->value.i64);
                 default:
                     goto type_mismatch;
+            }
+        case pa_object:
+            n = a->value.obj->get_operator(">=");
+            if(n) {
+                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+            } else {
+                goto type_mismatch;
             }
         default:
             goto type_mismatch; 
@@ -561,6 +647,7 @@ type_mismatch:
 }
 
 inline pa_value_t* pa_operator_gte(pa_value_t* a, pa_value_t* b) {
+    pa_value_t* n;
     switch(a->type) {
         case pa_integer:
             switch(b->type) {
@@ -568,6 +655,13 @@ inline pa_value_t* pa_operator_gte(pa_value_t* a, pa_value_t* b) {
                     return pa_new_boolean(a->value.i64 >= b->value.i64);
                 default:
                     goto type_mismatch;
+            }
+        case pa_object:
+            n = a->value.obj->get_operator(">=");
+            if(n) {
+                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+            } else {
+                goto type_mismatch;
             }
         default:
             goto type_mismatch; 
@@ -578,6 +672,7 @@ type_mismatch:
 }
 
 inline pa_value_t* pa_operator_lt(pa_value_t* a, pa_value_t* b) {
+    pa_value_t* n;
     switch(a->type) {
         case pa_integer:
             switch(b->type) {
@@ -585,6 +680,13 @@ inline pa_value_t* pa_operator_lt(pa_value_t* a, pa_value_t* b) {
                     return pa_new_boolean(a->value.i64 < b->value.i64);
                 default:
                     goto type_mismatch;
+            }
+        case pa_object:
+            n = a->value.obj->get_operator("<");
+            if(n) {
+                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+            } else {
+                goto type_mismatch;
             }
         default:
             goto type_mismatch; 
@@ -595,6 +697,7 @@ type_mismatch:
 }
 
 inline pa_value_t* pa_operator_lte(pa_value_t* a, pa_value_t* b) {
+    pa_value_t* n;
     switch(a->type) {
         case pa_integer:
             switch(b->type) {
@@ -602,6 +705,13 @@ inline pa_value_t* pa_operator_lte(pa_value_t* a, pa_value_t* b) {
                     return pa_new_boolean(a->value.i64 <= b->value.i64);
                 default:
                     goto type_mismatch;
+            }
+        case pa_object:
+            n = a->value.obj->get_operator("<=");
+            if(n) {
+                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+            } else {
+                goto type_mismatch;
             }
         default:
             goto type_mismatch; 
@@ -631,6 +741,13 @@ inline pa_value_t* pa_operator_right(pa_value_t* a, pa_value_t* b) {
                 default:
                     goto type_mismatch;
             }
+        case pa_object:
+            n = a->value.obj->get_operator("->");
+            if(n) {
+                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+            } else {
+                goto type_mismatch;
+            }
         default:
             goto type_mismatch; 
     }
@@ -641,6 +758,7 @@ type_mismatch:
 
 
 inline pa_value_t* pa_operator_or(pa_value_t* a, pa_value_t* b) {
+    pa_value_t* n;
     switch(a->type) {
         case pa_boolean:
             switch(b->type) {
@@ -648,6 +766,13 @@ inline pa_value_t* pa_operator_or(pa_value_t* a, pa_value_t* b) {
                     return pa_new_boolean(a->value.b || b->value.b);
                 default:
                     goto type_mismatch;
+            }
+        case pa_object:
+            n = a->value.obj->get_operator("or");
+            if(n) {
+                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+            } else {
+                goto type_mismatch;
             }
         default:
             goto type_mismatch; 
@@ -658,6 +783,7 @@ type_mismatch:
 }
 
 inline pa_value_t* pa_operator_and(pa_value_t* a, pa_value_t* b) {
+    pa_value_t* n;
     switch(a->type) {
         case pa_boolean:
             switch(b->type) {
@@ -665,6 +791,13 @@ inline pa_value_t* pa_operator_and(pa_value_t* a, pa_value_t* b) {
                     return pa_new_boolean(a->value.b && b->value.b);
                 default:
                     goto type_mismatch;
+            }
+        case pa_object:
+            n = a->value.obj->get_operator("and");
+            if(n) {
+                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+            } else {
+                goto type_mismatch;
             }
         default:
             goto type_mismatch; 
@@ -675,6 +808,7 @@ type_mismatch:
 }
 
 inline pa_value_t* pa_operator_length(pa_value_t* a) {
+    pa_value_t* n;
     list<pa_value_t*>* l;
     string* s;
     switch(a->type) {
@@ -684,6 +818,13 @@ inline pa_value_t* pa_operator_length(pa_value_t* a) {
         case pa_string:
             s = PV2STR(a);
             return pa_new_integer(s->length());
+        case pa_object:
+            n = a->value.obj->get_operator("length");
+            if(n) {
+                return pa_function_call(n, pa_new_list(), pa_new_dictionary(), a);
+            } else {
+                goto type_mismatch;
+            }
         default:
             goto type_mismatch; 
     }
