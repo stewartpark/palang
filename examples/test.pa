@@ -11,16 +11,3 @@ if s < 1000 {
 }
 
 print(s, "\n");
-
-# Map function
-two = range(1,9) -> func(x) = 2*x
-
-for x in two {
-    print(x, " ")
-}
-print("\n")
-
-# Importing external library.
-import libsample
-libsample.test_func(10)
-print("Variable from libsample: ", libsample.test_var, "\n")

@@ -1,0 +1,4 @@
+# Importing external library.
+import libsample
+libsample.test_func(10)
+print("Variable from libsample: ", libsample.test_var, "\n")
