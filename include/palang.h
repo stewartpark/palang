@@ -61,7 +61,6 @@ struct pa_value_t {
         pa_object_data* obj;
     } value;
     enum pa_type_t type;
-    pa_value_t* _this;
 };
 
 class pa_class_data {
