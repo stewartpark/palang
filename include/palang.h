@@ -15,11 +15,21 @@
 #include <algorithm>
 #include <dlfcn.h>
 #include <unistd.h>
+#include <gc/gc.h>
+#include <gc/gc_cpp.h>
+#include <gc/gc_allocator.h>
+
+inline void * operator new(size_t n) { return GC_malloc(n);  }
+inline void operator delete(void *) {}
+inline void * operator new[](size_t n) { return GC_malloc(n);  }
+inline void operator delete[](void *) {}
+
+#define pa_list_t list<pa_value_t*>
+#define pa_dict_t map<string,pa_value_t*>
 
 #define PV2STR(x) (static_cast<string*>((x)->value.ptr))
-#define PV2LIST(x) (static_cast<list<pa_value_t*>*>((x)->value.ptr))
-#define PV2MAP(x) (static_cast<map<string,pa_value_t*>*>((x)->value.ptr))
-#define inline
+#define PV2LIST(x) (static_cast<pa_list_t*>((x)->value.ptr))
+#define PV2MAP(x) (static_cast<pa_dict_t*>((x)->value.ptr))
 
 using namespace std;
 
@@ -40,33 +50,32 @@ struct pa_value_t;
 class pa_object_data;
 class pa_class_data;
 
-struct pa_value_t {
-    union {
-        int8_t i8;
-        int16_t i16;
-        int32_t i32;
-        int64_t i64;
-        uint8_t u8;
-        uint16_t u16;
-        uint32_t u32;
-        uint64_t u64;
-        bool b;
-        float f32;
-        double f64;
-        void* ptr; 
-        //list<pa_value*>* list;
-        //map<string,pa_value*>* dict;
-        function<pa_value_t*(pa_value_t*,pa_value_t*,pa_value_t*)>* func;
-        pa_class_data* cls;
-        pa_object_data* obj;
-    } value;
-    enum pa_type_t type;
+class pa_value_t {
+    public:
+        union {
+            int8_t i8;
+            int16_t i16;
+            int32_t i32;
+            int64_t i64;
+            uint8_t u8;
+            uint16_t u16;
+            uint32_t u32;
+            uint64_t u64;
+            bool b;
+            float f32;
+            double f64;
+            void* ptr; 
+            function<pa_value_t*(pa_value_t*,pa_value_t*,pa_value_t*)>* func;
+            pa_class_data* cls;
+            pa_object_data* obj;
+        } value;
+        enum pa_type_t type;
 };
 
-class pa_class_data {
+class pa_class_data : public gc {
     private:
-        map<string, pa_value_t*> members;
-        map<string, pa_value_t*> operators;
+        pa_dict_t members;
+        pa_dict_t operators;
     public:
         void set_member(string name, pa_value_t* value) { this->members[name] = value; }
         pa_value_t* get_member(string name) { return this->members[name]; }
@@ -74,10 +83,10 @@ class pa_class_data {
         pa_value_t* get_operator(string name) { return this->operators[name]; }
 };
 
-class pa_object_data {
+class pa_object_data : public gc {
     private:
         pa_class_data* _class;
-        map<string, pa_value_t*> members;
+        pa_dict_t members;
     public:
         pa_object_data() {}
         pa_object_data(pa_class_data* _class) { this->_class = _class; }
@@ -101,8 +110,6 @@ class pa_object_data {
         }
 };
 
-list<pa_value_t*> pool;
-
 // Types
 
 inline pa_value_t* pa_new_nil() {
@@ -110,7 +117,6 @@ inline pa_value_t* pa_new_nil() {
     if(!r) { 
         r = new pa_value_t;
         r->type = pa_nil;
-        pool.push_back(r);
     }
     return r;
 }
@@ -135,7 +141,6 @@ inline pa_value_t* pa_new_boolean(bool v) {
     pa_value_t *r = new pa_value_t;
     r->value.b = v;
     r->type = pa_boolean;
-    pool.push_back(r);
     return r;
 }
 
@@ -143,18 +148,16 @@ inline pa_value_t* pa_new_integer(int64_t v) {
     pa_value_t *r = new pa_value_t;
     r->value.i64 = v;
     r->type = pa_integer;
-    pool.push_back(r);
     return r;
 }
 
-#define pa_new_list(...) _pa_new_list(list<pa_value_t*>{ __VA_ARGS__ })
-inline pa_value_t* _pa_new_list(list<pa_value_t*> li) {
+#define pa_new_list(...) _pa_new_list(pa_list_t{ __VA_ARGS__ })
+inline pa_value_t* _pa_new_list(pa_list_t li) {
     pa_value_t *r = new pa_value_t;
-    list<pa_value_t*>* l = new list<pa_value_t*>;
+    pa_list_t* l = new pa_list_t;
     *l = li;
     r->value.ptr = (void*)l;
     r->type = pa_list;
-    pool.push_back(r);
     return r;
 }
 
@@ -170,14 +173,13 @@ inline string pa_operator_hash(pa_value_t* o) {
 }
 
 #define pa_new_dictionary_kv(k, v) {pa_operator_hash(k), v}
-#define pa_new_dictionary(...) _pa_new_dictionary(map<string,pa_value_t*>{ __VA_ARGS__ })
-inline pa_value_t* _pa_new_dictionary(map<string,pa_value_t*> dict) {
+#define pa_new_dictionary(...) _pa_new_dictionary(pa_dict_t{ __VA_ARGS__ })
+inline pa_value_t* _pa_new_dictionary(pa_dict_t dict) {
     pa_value_t *r = new pa_value_t;
-    map<string,pa_value_t*>* d = new map<string,pa_value_t*>;
+    pa_dict_t* d = new pa_dict_t;
     *d = dict;
     r->value.ptr = (void*)d;
     r->type = pa_dictionary;
-    pool.push_back(r);
     return r;
 }
 
@@ -187,7 +189,6 @@ inline pa_value_t* pa_new_string(string str) {
     *s = str;
     r->value.ptr = (void*)s;
     r->type = pa_string;
-    pool.push_back(r);
     return r;
 }
 
@@ -197,7 +198,6 @@ inline pa_value_t* pa_new_function(function<pa_value_t*(pa_value_t*,pa_value_t*,
     *ff = f;
     r->value.func = ff;
     r->type = pa_function;
-    pool.push_back(r);
     return r;
 
 }
@@ -206,14 +206,12 @@ inline pa_value_t* pa_new_class() {
     pa_value_t *r = new pa_value_t;
     r->value.cls = new pa_class_data;
     r->type = pa_class;
-    pool.push_back(r);
     return r;
 }
 
 inline pa_value_t* pa_new_object() {
     pa_value_t *r = new pa_value_t;
     r->type = pa_object;
-    pool.push_back(r);
     return r;
 }
 
@@ -221,7 +219,6 @@ inline pa_value_t* pa_new_object(pa_class_data* _class) {
     pa_value_t *r = new pa_value_t;
     r->value.obj = new pa_object_data(_class);
     r->type = pa_object;
-    pool.push_back(r);
     return r;
 }
 
@@ -247,13 +244,13 @@ inline pa_value_t* pa_function_call(pa_value_t* func, pa_value_t* args, pa_value
 }
 
 pa_value_t* pa_get_argument(pa_value_t *args, pa_value_t *kwargs, const size_t nth, const string name, pa_value_t *def) {
-    list<pa_value_t*> &_args = *PV2LIST(args);
-    map<string,pa_value_t*> &_kwargs = *PV2MAP(kwargs);
+    pa_list_t &_args = *PV2LIST(args);
+    pa_dict_t &_kwargs = *PV2MAP(kwargs);
     
     if(_kwargs.count(name)) {
         return _kwargs[name];
     } else if(_args.size() >= nth+1) {
-        list<pa_value_t*>::iterator it = _args.begin();
+        pa_list_t::iterator it = _args.begin();
         advance(it, nth);
         return *it;
     } else {
@@ -268,9 +265,9 @@ pa_value_t* pa_get_argument(pa_value_t *args, pa_value_t *kwargs, const size_t n
 
 // Operators
 inline pa_value_t* pa_operator_setitem(pa_value_t* a, pa_value_t* b, pa_value_t* c) {
-    list<pa_value_t*>* l;
-    list<pa_value_t*>::iterator it;
-    map<string,pa_value_t*>* m;
+    pa_list_t* l;
+    pa_list_t::iterator it;
+    pa_dict_t* m;
     pa_value_t* n;
     string* s;
 
@@ -308,9 +305,9 @@ type_mismatch:
 }
 
 inline pa_value_t* pa_operator_getitem(pa_value_t* a, pa_value_t* b) {
-    list<pa_value_t*>* l;
-    list<pa_value_t*>::iterator it;
-    map<string,pa_value_t*>* m;
+    pa_list_t* l;
+    pa_list_t::iterator it;
+    pa_dict_t* m;
     string* s;
     pa_value_t* n;
 
@@ -406,8 +403,8 @@ type_mismatch:
 
 inline pa_value_t* pa_operator_add(pa_value_t* a, pa_value_t* b) {
     pa_value_t* n;
-    list<pa_value_t*> *l1, *l2;
-    list<pa_value_t*>::iterator it;
+    pa_list_t *l1, *l2;
+    pa_list_t::iterator it;
     switch(a->type) {
         case pa_integer:
             switch(b->type) {
@@ -723,8 +720,8 @@ type_mismatch:
 inline pa_value_t* pa_operator_right(pa_value_t* a, pa_value_t* b) {
     // Flow operator (right).
     pa_value_t* n;
-    list<pa_value_t*> *l1, *l2;
-    list<pa_value_t*>::iterator it;
+    pa_list_t *l1, *l2;
+    pa_list_t::iterator it;
     switch(a->type) {
         case pa_list:
             switch(b->type) {
@@ -808,7 +805,7 @@ type_mismatch:
 
 inline pa_value_t* pa_operator_length(pa_value_t* a) {
     pa_value_t* n;
-    list<pa_value_t*>* l;
+    pa_list_t* l;
     string* s;
     switch(a->type) {
         case pa_list:
@@ -884,6 +881,7 @@ inline pa_value_t* pa_import(string name) {
 
 inline void PA_ENTER(int argc, char** argv, char** env) {
     //TODO 
+    GC_INIT();
 }
 
 inline int PA_LEAVE(pa_value_t *ret) {
@@ -915,8 +913,8 @@ inline int PA_LEAVE(pa_value_t *ret) {
         } \
     }); \
     _print = pa_new_function([](pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) -> pa_value_t* { \
-        list<pa_value_t*> *_args = PV2LIST(args); \
-        list<pa_value_t*>::iterator it; \
+        pa_list_t *_args = PV2LIST(args); \
+        pa_list_t::iterator it; \
         for(it = _args->begin(); it != _args->end(); ++it) { \
             pa_value_t* msg = *it; \
             switch(msg->type) { \

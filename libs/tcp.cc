@@ -1,12 +1,13 @@
 #include <palang.h>
-#include <stdio.h> /* for printf() and fprintf() */ 
-#include <sys/types.h> /* for Socket data types */ 
-#include <sys/socket.h> /* for socket(), connect(), send(), and recv() */ 
-#include <netinet/in.h> /* for IP Socket data types */ 
-#include <arpa/inet.h> /* for sockaddr_in and inet_addr() */ 
-#include <stdlib.h> /* for atoi() */ 
-#include <string.h> /* for memset() */ 
-#include <unistd.h> /* for close() */
+#include <stdio.h> 
+#include <sys/types.h> 
+#include <sys/socket.h> 
+#include <netinet/in.h>  
+#include <arpa/inet.h> 
+#include <stdlib.h>
+#include <string.h>  
+#include <unistd.h>
+#include <gc/gc.h>
 
 pa_value_t* _socket(pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
     int sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -35,7 +36,7 @@ pa_value_t* _connect(pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
 pa_value_t* _read(pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
     pa_value_t* socket = pa_get_argument(args, kwargs, 0, "socket", pa_new_nil());
 
-    char* buffer = (char*)malloc(1024);
+    char* buffer = (char*)GC_MALLOC(1024);
     int sock = socket->value.i32;
     
     recv(sock, buffer, 1024, 0);

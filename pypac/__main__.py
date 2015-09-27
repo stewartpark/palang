@@ -4,7 +4,7 @@ from optparse import OptionParser
 import parser, compiler
 
 CXX = os.environ.get("CXX", "c++")
-CXXFLAGS = os.environ.get("CXXFLAGS", "-O3 -g -std=c++11 -ldl ")
+CXXFLAGS = os.environ.get("CXXFLAGS", "-O3 -g -std=c++11 -ldl -lgc")
 PA_HOME = os.path.abspath(os.environ.get("PA_HOME", "."))
 
 pp = pprint.PrettyPrinter(indent=2,width=80)

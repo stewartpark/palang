@@ -29,7 +29,7 @@ pa_value_t* __close(pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
 pa_value_t* __read(pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
     pa_value_t* handle = pa_get_argument(args, kwargs, 0, "handle", pa_new_nil());
 
-    char* buffer = (char*)malloc(sizeof(char) * 1024);
+    char* buffer = (char*)GC_MALLOC(sizeof(char) * 1024);
     FILE* fp = (FILE*)(handle->value.i64);    
 
 
