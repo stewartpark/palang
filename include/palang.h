@@ -19,13 +19,14 @@
 #include <gc/gc_cpp.h>
 #include <gc/gc_allocator.h>
 
-inline void * operator new(size_t n) { return GC_malloc(n);  }
+inline void * operator new(size_t n) { return GC_malloc_atomic(n); }
 inline void operator delete(void *) {}
-inline void * operator new[](size_t n) { return GC_malloc(n);  }
+inline void * operator new[](size_t n) { return GC_malloc_atomic(n); }
 inline void operator delete[](void *) {}
 
-#define pa_list_t list<pa_value_t*>
+#define pa_list_t list<pa_value_t*,gc_allocator<pa_value_t*>>
 #define pa_dict_t map<string,pa_value_t*>
+#define pa_func_t function<pa_value_t*(pa_list_t,pa_dict_t,pa_value_t*)>
 
 #define PV2STR(x) (static_cast<string*>((x)->value.ptr))
 #define PV2LIST(x) (static_cast<pa_list_t*>((x)->value.ptr))
@@ -50,7 +51,7 @@ struct pa_value_t;
 class pa_object_data;
 class pa_class_data;
 
-class pa_value_t {
+class pa_value_t : public gc {
     public:
         union {
             int8_t i8;
@@ -65,7 +66,7 @@ class pa_value_t {
             float f32;
             double f64;
             void* ptr; 
-            function<pa_value_t*(pa_value_t*,pa_value_t*,pa_value_t*)>* func;
+            pa_func_t* func;
             pa_class_data* cls;
             pa_object_data* obj;
         } value;
@@ -154,7 +155,7 @@ inline pa_value_t* pa_new_integer(int64_t v) {
 #define pa_new_list(...) _pa_new_list(pa_list_t{ __VA_ARGS__ })
 inline pa_value_t* _pa_new_list(pa_list_t li) {
     pa_value_t *r = new pa_value_t;
-    pa_list_t* l = new pa_list_t;
+    pa_list_t* l = ::new(GC) pa_list_t;
     *l = li;
     r->value.ptr = (void*)l;
     r->type = pa_list;
@@ -176,7 +177,7 @@ inline string pa_operator_hash(pa_value_t* o) {
 #define pa_new_dictionary(...) _pa_new_dictionary(pa_dict_t{ __VA_ARGS__ })
 inline pa_value_t* _pa_new_dictionary(pa_dict_t dict) {
     pa_value_t *r = new pa_value_t;
-    pa_dict_t* d = new pa_dict_t;
+    pa_dict_t* d = ::new(GC) pa_dict_t;
     *d = dict;
     r->value.ptr = (void*)d;
     r->type = pa_dictionary;
@@ -185,16 +186,17 @@ inline pa_value_t* _pa_new_dictionary(pa_dict_t dict) {
 
 inline pa_value_t* pa_new_string(string str) {
     pa_value_t *r = new pa_value_t;
-    string* s = new string;
+    delete &str;
+    string* s = ::new(GC) string;
     *s = str;
     r->value.ptr = (void*)s;
     r->type = pa_string;
     return r;
 }
 
-inline pa_value_t* pa_new_function(function<pa_value_t*(pa_value_t*,pa_value_t*,pa_value_t*)> f) {
+inline pa_value_t* pa_new_function(pa_func_t f) {
     pa_value_t *r = new pa_value_t;
-    function<pa_value_t*(pa_value_t*,pa_value_t*,pa_value_t*)>* ff = new function<pa_value_t*(pa_value_t*,pa_value_t*,pa_value_t*)>;
+    pa_func_t* ff = ::new(GC) pa_func_t;
     *ff = f;
     r->value.func = ff;
     r->type = pa_function;
@@ -224,7 +226,7 @@ inline pa_value_t* pa_new_object(pa_class_data* _class) {
 
 // Function invoke
 
-inline pa_value_t* pa_function_call(pa_value_t* func, pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
+inline pa_value_t* pa_function_call(pa_value_t* func, pa_list_t args, pa_dict_t kwargs, pa_value_t* _this) {
     
     if(func->type == pa_function) {
         return (*(func->value.func))(args, kwargs, _this);
@@ -243,14 +245,11 @@ inline pa_value_t* pa_function_call(pa_value_t* func, pa_value_t* args, pa_value
 
 }
 
-pa_value_t* pa_get_argument(pa_value_t *args, pa_value_t *kwargs, const size_t nth, const string name, pa_value_t *def) {
-    pa_list_t &_args = *PV2LIST(args);
-    pa_dict_t &_kwargs = *PV2MAP(kwargs);
-    
-    if(_kwargs.count(name)) {
-        return _kwargs[name];
-    } else if(_args.size() >= nth+1) {
-        pa_list_t::iterator it = _args.begin();
+pa_value_t* pa_get_argument(pa_list_t& args, pa_dict_t& kwargs, const size_t nth, const string name, pa_value_t *def) {
+    if(kwargs.count(name)) {
+        return kwargs[name];
+    } else if(args.size() >= nth+1) {
+        pa_list_t::iterator it = args.begin();
         advance(it, nth);
         return *it;
     } else {
@@ -292,7 +291,7 @@ inline pa_value_t* pa_operator_setitem(pa_value_t* a, pa_value_t* b, pa_value_t*
         case pa_object:
             n = a->value.obj->get_operator("setitem");
             if(n) {
-                return pa_function_call(n, pa_new_list(b, c), pa_new_dictionary(), a);
+                return pa_function_call(n, pa_list_t{b, c}, pa_dict_t{}, a);
             } else {
                 goto type_mismatch;
             }
@@ -345,7 +344,7 @@ inline pa_value_t* pa_operator_getitem(pa_value_t* a, pa_value_t* b) {
         case pa_object:
             n = a->value.obj->get_operator("getitem");
             if(n) {
-                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+                return pa_function_call(n, pa_list_t{b}, pa_dict_t{}, a);
             } else {
                 goto type_mismatch;
             }
@@ -365,7 +364,7 @@ inline pa_value_t* pa_operator_setattr(pa_value_t* a, string b, pa_value_t* c) {
             if(!ret) {
                 ret = a->value.obj->get_class()->get_operator("setattr");
                 if(ret) {
-                    ret = pa_function_call(ret, pa_new_list(a, pa_new_string(b), c), pa_new_dictionary(), a);
+                    ret = pa_function_call(ret, pa_list_t{a, pa_new_string(b), c}, pa_dict_t{}, a);
                     return ret;
                 } 
             } 
@@ -386,7 +385,7 @@ inline pa_value_t* pa_operator_getattr(pa_value_t* a, string b) {
             if(!ret) {
                 ret = a->value.obj->get_class()->get_operator("getattr");
                 if(ret) {
-                    ret = pa_function_call(ret, pa_new_list(a, pa_new_string(b)), pa_new_dictionary(), a);
+                    ret = pa_function_call(ret, pa_list_t{a, pa_new_string(b)}, pa_dict_t{}, a);
                 } else {
                     printf("Runtime Error: no such attribute/method.\n");
                     exit(1); 
@@ -440,7 +439,7 @@ inline pa_value_t* pa_operator_add(pa_value_t* a, pa_value_t* b) {
         case pa_object:
             n = a->value.obj->get_operator("+");
             if(n) {
-                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+                return pa_function_call(n, pa_list_t{b}, pa_dict_t{}, a);
             } else {
                 goto type_mismatch;
             }
@@ -465,7 +464,7 @@ inline pa_value_t* pa_operator_subtract(pa_value_t *a, pa_value_t *b) {
         case pa_object:
             n = a->value.obj->get_operator("-");
             if(n) {
-                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+                return pa_function_call(n, pa_list_t{b}, pa_dict_t{}, a);
             } else {
                 goto type_mismatch;
             }
@@ -490,7 +489,7 @@ inline pa_value_t* pa_operator_multiply(pa_value_t* a, pa_value_t* b) {
         case pa_object:
             n = a->value.obj->get_operator("*");
             if(n) {
-                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+                return pa_function_call(n, pa_list_t{b}, pa_dict_t{}, a);
             } else {
                 goto type_mismatch;
             }
@@ -515,7 +514,7 @@ inline pa_value_t* pa_operator_divide(pa_value_t* a, pa_value_t* b) {
         case pa_object:
             n = a->value.obj->get_operator("/");
             if(n) {
-                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+                return pa_function_call(n, pa_list_t{b}, pa_dict_t{}, a);
             } else {
                 goto type_mismatch;
             }
@@ -540,7 +539,7 @@ inline pa_value_t* pa_operator_modulo(pa_value_t* a, pa_value_t* b) {
         case pa_object:
             n = a->value.obj->get_operator("mod");
             if(n) {
-                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+                return pa_function_call(n, pa_list_t{b}, pa_dict_t{}, a);
             } else {
                 goto type_mismatch;
             }
@@ -573,7 +572,7 @@ inline pa_value_t* pa_operator_eq(pa_value_t* a, pa_value_t* b) {
         case pa_object:
             n = a->value.obj->get_operator("==");
             if(n) {
-                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+                return pa_function_call(n, pa_list_t{b}, pa_dict_t{}, a);
             } else {
                 goto type_mismatch;
             }
@@ -605,7 +604,7 @@ inline pa_value_t* pa_operator_neq(pa_value_t* a, pa_value_t* b) {
         case pa_object:
             n = a->value.obj->get_operator("!=");
             if(n) {
-                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+                return pa_function_call(n, pa_list_t{b}, pa_dict_t{}, a);
             } else {
                 goto type_mismatch;
             }
@@ -630,7 +629,7 @@ inline pa_value_t* pa_operator_gt(pa_value_t* a, pa_value_t* b) {
         case pa_object:
             n = a->value.obj->get_operator(">=");
             if(n) {
-                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+                return pa_function_call(n, pa_list_t{b}, pa_dict_t{}, a);
             } else {
                 goto type_mismatch;
             }
@@ -655,7 +654,7 @@ inline pa_value_t* pa_operator_gte(pa_value_t* a, pa_value_t* b) {
         case pa_object:
             n = a->value.obj->get_operator(">=");
             if(n) {
-                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+                return pa_function_call(n, pa_list_t{b}, pa_dict_t{}, a);
             } else {
                 goto type_mismatch;
             }
@@ -680,7 +679,7 @@ inline pa_value_t* pa_operator_lt(pa_value_t* a, pa_value_t* b) {
         case pa_object:
             n = a->value.obj->get_operator("<");
             if(n) {
-                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+                return pa_function_call(n, pa_list_t{b}, pa_dict_t{}, a);
             } else {
                 goto type_mismatch;
             }
@@ -705,7 +704,7 @@ inline pa_value_t* pa_operator_lte(pa_value_t* a, pa_value_t* b) {
         case pa_object:
             n = a->value.obj->get_operator("<=");
             if(n) {
-                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+                return pa_function_call(n, pa_list_t{b}, pa_dict_t{}, a);
             } else {
                 goto type_mismatch;
             }
@@ -731,7 +730,7 @@ inline pa_value_t* pa_operator_right(pa_value_t* a, pa_value_t* b) {
                     l1 = PV2LIST(a);
                     l2 = PV2LIST(n);
                     for(it = l1->begin(); it != l1->end(); ++it){
-                        l2->push_back(pa_function_call(b, pa_new_list(*it), pa_new_dictionary(), a));
+                        l2->push_back(pa_function_call(b, pa_list_t{*it}, pa_dict_t{}, a));
                     }
                     return n;
                 default:
@@ -740,7 +739,7 @@ inline pa_value_t* pa_operator_right(pa_value_t* a, pa_value_t* b) {
         case pa_object:
             n = a->value.obj->get_operator("->");
             if(n) {
-                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+                return pa_function_call(n, pa_list_t{b}, pa_dict_t{}, a);
             } else {
                 goto type_mismatch;
             }
@@ -766,7 +765,7 @@ inline pa_value_t* pa_operator_or(pa_value_t* a, pa_value_t* b) {
         case pa_object:
             n = a->value.obj->get_operator("or");
             if(n) {
-                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+                return pa_function_call(n, pa_list_t{b}, pa_dict_t{}, a);
             } else {
                 goto type_mismatch;
             }
@@ -791,7 +790,7 @@ inline pa_value_t* pa_operator_and(pa_value_t* a, pa_value_t* b) {
         case pa_object:
             n = a->value.obj->get_operator("and");
             if(n) {
-                return pa_function_call(n, pa_new_list(b), pa_new_dictionary(), a);
+                return pa_function_call(n, pa_list_t{b}, pa_dict_t{}, a);
             } else {
                 goto type_mismatch;
             }
@@ -817,7 +816,7 @@ inline pa_value_t* pa_operator_length(pa_value_t* a) {
         case pa_object:
             n = a->value.obj->get_operator("length");
             if(n) {
-                return pa_function_call(n, pa_new_list(), pa_new_dictionary(), a);
+                return pa_function_call(n, pa_list_t{}, pa_dict_t{}, a);
             } else {
                 goto type_mismatch;
             }
@@ -860,7 +859,7 @@ inline pa_value_t* pa_import(string name) {
         pa_value_t* mod = mod_init();
 
         pa_value_t* mod_class = pa_new_class();
-        mod_class->value.cls->set_operator("getattr", pa_new_function([=](pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) -> pa_value_t* {
+        mod_class->value.cls->set_operator("getattr", pa_new_function([=](pa_list_t args, pa_dict_t kwargs, pa_value_t* _this) -> pa_value_t* {
             pa_value_t *__this = pa_get_argument(args, kwargs, 0, "", pa_new_nil());
             pa_value_t *attr_name = pa_get_argument(args, kwargs, 1, "", pa_new_nil());
             pa_value_t* attr = pa_operator_getitem(mod, attr_name); 
@@ -882,6 +881,7 @@ inline pa_value_t* pa_import(string name) {
 inline void PA_ENTER(int argc, char** argv, char** env) {
     //TODO 
     GC_INIT();
+    GC_enable_incremental();
 }
 
 inline int PA_LEAVE(pa_value_t *ret) {
@@ -895,7 +895,7 @@ inline int PA_LEAVE(pa_value_t *ret) {
     pa_value_t *_range; \
     pa_value_t *_input; \
     pa_value_t *_len; \
-    _range = pa_new_function([](pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) -> pa_value_t* { \
+    _range = pa_new_function([](pa_list_t args, pa_dict_t kwargs, pa_value_t* _this) -> pa_value_t* { \
         pa_value_t *start = pa_get_argument(args, kwargs, 0, "start", pa_new_nil()); \
         pa_value_t *end = pa_get_argument(args, kwargs, 1, "end", pa_new_nil()); \
         pa_value_t *step = pa_get_argument(args, kwargs, 2, "step", pa_new_integer(1)); \
@@ -912,10 +912,9 @@ inline int PA_LEAVE(pa_value_t *ret) {
             exit(1); \
         } \
     }); \
-    _print = pa_new_function([](pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) -> pa_value_t* { \
-        pa_list_t *_args = PV2LIST(args); \
+    _print = pa_new_function([](pa_list_t args, pa_dict_t kwargs, pa_value_t* _this) -> pa_value_t* { \
         pa_list_t::iterator it; \
-        for(it = _args->begin(); it != _args->end(); ++it) { \
+        for(it = args.begin(); it != args.end(); ++it) { \
             pa_value_t* msg = *it; \
             switch(msg->type) { \
                 case pa_nil: \
@@ -938,13 +937,13 @@ inline int PA_LEAVE(pa_value_t *ret) {
         } \
         return pa_new_nil(); \
     }); \
-    _input = pa_new_function([](pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) -> pa_value_t* { \
+    _input = pa_new_function([](pa_list_t args, pa_dict_t kwargs, pa_value_t* _this) -> pa_value_t* { \
         long long int N; \
         register int t = scanf("%lld", &N); \
         pa_value_t* n = pa_new_integer(N); \
         return n; \
     }); \
-    _len = pa_new_function([](pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) -> pa_value_t* { \
+    _len = pa_new_function([](pa_list_t args, pa_dict_t kwargs, pa_value_t* _this) -> pa_value_t* { \
         pa_value_t *o = pa_get_argument(args, kwargs, 0, "object", pa_new_nil()); \
         switch(o->type) {\
             case pa_list: \

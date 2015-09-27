@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-pa_value_t* __open(pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
+pa_value_t* __open(pa_list_t args, pa_dict_t kwargs, pa_value_t* _this) {
     pa_value_t* filename = pa_get_argument(args, kwargs, 0, "filename", pa_new_nil());
     pa_value_t* mode = pa_get_argument(args, kwargs, 1, "mode", pa_new_string("r"));
 
@@ -15,7 +15,7 @@ pa_value_t* __open(pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
     return pa_new_integer((int64_t)fp);
 }
 
-pa_value_t* __close(pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
+pa_value_t* __close(pa_list_t args, pa_dict_t kwargs, pa_value_t* _this) {
     pa_value_t* handle = pa_get_argument(args, kwargs, 0, "handle", pa_new_nil());
     
     FILE* fp = (FILE *)(handle->value.ptr);    
@@ -26,7 +26,7 @@ pa_value_t* __close(pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
 }
 
 
-pa_value_t* __read(pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
+pa_value_t* __read(pa_list_t args, pa_dict_t kwargs, pa_value_t* _this) {
     pa_value_t* handle = pa_get_argument(args, kwargs, 0, "handle", pa_new_nil());
 
     char* buffer = (char*)GC_MALLOC(sizeof(char) * 1024);
@@ -39,7 +39,7 @@ pa_value_t* __read(pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
     return pa_new_string(string(buffer));
 }
 
-pa_value_t* __write(pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) {
+pa_value_t* __write(pa_list_t args, pa_dict_t kwargs, pa_value_t* _this) {
     pa_value_t* handle = pa_get_argument(args, kwargs, 0, "handle", pa_new_nil());
     pa_value_t* _buffer = pa_get_argument(args, kwargs, 1, "buffer", pa_new_nil());
     char* buffer = (char*)(PV2STR(_buffer)->c_str());

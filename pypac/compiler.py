@@ -6,7 +6,7 @@ class CppGenerator:
     def cfunc_call(self, name, *args):
         return name + "(" + (",".join(args)) + ")"
     def func_call(self, name, this="_this", *args, **kwargs):
-        return self.cfunc_call("pa_function_call", name, self.literal_list(*args), self.literal_dict(*[self.literal_dict_kw(x,y) for x,y in kwargs]), this)
+        return self.cfunc_call("pa_function_call", name, self.literal_clist(*args), self.literal_cdict(*[self.literal_cdict_kw(x,y) for x,y in kwargs]), this)
     def literal_nil(self):
         return self.cfunc_call("pa_new_nil")
     def literal_bool(self, v):
@@ -18,13 +18,19 @@ class CppGenerator:
     def literal_str(self, v):
         return self.cfunc_call("pa_new_string", "\"" + v + "\"")
     def literal_func(self, *args):
-        return self.cfunc_call("pa_new_function", "[=](pa_value_t* args, pa_value_t* kwargs, pa_value_t* _this) -> pa_value_t* {" + ("".join(args)) + "}")
+        return self.cfunc_call("pa_new_function", "[=](pa_list_t args, pa_dict_t kwargs, pa_value_t* _this) -> pa_value_t* {" + ("".join(args)) + "}")
     def literal_list(self, *args):
         return self.cfunc_call("pa_new_list", *args)
     def literal_dict_kv(self, k, v):
         return self.cfunc_call("pa_new_dictionary_kv", k, v)
     def literal_dict(self, *args):
         return self.cfunc_call("pa_new_dictionary", *args)
+    def literal_clist(self, *args):
+        return "pa_list_t{" + (",".join(args)) + "}"
+    def literal_cdict_kv(self, k, v):
+        return "{" + k + "," + v + "}"
+    def literal_cdict(self, *args):
+        return "pa_dict_t{" + (",".join(args)) + "}"
     def literal_obj(self, class_name):
         return self.cfunc_call("pa_new_object", class_name)
     def literal_cls(self):
