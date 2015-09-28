@@ -13,6 +13,7 @@
 #include <string>
 #include <functional>
 #include <algorithm>
+#include <stdio.h>
 #include <dlfcn.h>
 #include <unistd.h>
 #include <gc/gc.h>
