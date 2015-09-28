@@ -12,7 +12,7 @@
 pa_value_t* _socket(pa_list_t args, pa_dict_t kwargs, pa_value_t* _this) {
     int sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
     int optval = 1;
-    setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(optval));
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
     return pa_new_integer(sock);
 }
 
