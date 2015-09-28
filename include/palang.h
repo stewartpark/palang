@@ -24,11 +24,12 @@ inline void operator delete(void *) {}
 inline void * operator new[](size_t n) { return GC_malloc(n);  }
 inline void operator delete[](void *) {}
 
+#define pa_string_t basic_string<char,char_traits<char>,gc_allocator<char>>
 #define pa_list_t list<pa_value_t*>
-#define pa_dict_t map<string,pa_value_t*>
+#define pa_dict_t map<pa_string_t,pa_value_t*>
 #define pa_func_t function<pa_value_t*(pa_list_t,pa_dict_t,pa_value_t*)>
 
-#define PV2STR(x) (static_cast<string*>((x)->value.ptr))
+#define PV2STR(x) (static_cast<pa_string_t*>((x)->value.ptr))
 #define PV2LIST(x) (static_cast<pa_list_t*>((x)->value.ptr))
 #define PV2MAP(x) (static_cast<pa_dict_t*>((x)->value.ptr))
 
@@ -47,7 +48,7 @@ enum pa_type_t {
     pa_object
 }; 
 
-struct pa_value_t;
+class pa_value_t;
 class pa_object_data;
 class pa_class_data;
 
@@ -78,10 +79,10 @@ class pa_class_data : public gc {
         pa_dict_t members;
         pa_dict_t operators;
     public:
-        void set_member(string name, pa_value_t* value) { this->members[name] = value; }
-        pa_value_t* get_member(string name) { return this->members[name]; }
-        void set_operator(string name, pa_value_t* value) { this->operators[name] = value; }
-        pa_value_t* get_operator(string name) { return this->operators[name]; }
+        void set_member(pa_string_t name, pa_value_t* value) { this->members[name] = value; }
+        pa_value_t* get_member(pa_string_t name) { return this->members[name]; }
+        void set_operator(pa_string_t name, pa_value_t* value) { this->operators[name] = value; }
+        pa_value_t* get_operator(pa_string_t name) { return this->operators[name]; }
 };
 
 class pa_object_data : public gc {
@@ -92,15 +93,15 @@ class pa_object_data : public gc {
         pa_object_data() {}
         pa_object_data(pa_class_data* _class) { this->_class = _class; }
         pa_class_data* get_class() { return this->_class; }
-        pa_value_t* get_operator(string name) { 
+        pa_value_t* get_operator(pa_string_t name) { 
             if(this->_class) {
                 return this->_class->get_operator(name);
             } else {
                 return NULL;
             }
         }
-        void set_member(string name, pa_value_t* value) { this->members[name] = value; }
-        pa_value_t* get_member(string name) { 
+        void set_member(pa_string_t name, pa_value_t* value) { this->members[name] = value; }
+        pa_value_t* get_member(pa_string_t name) { 
             if(this->members[name]){
                 return this->members[name]; 
             } else if(this->_class && this->_class->get_member(name)) {
@@ -162,7 +163,7 @@ inline pa_value_t* _pa_new_list(pa_list_t li) {
     return r;
 }
 
-inline string pa_operator_hash(pa_value_t* o) {
+inline pa_string_t pa_operator_hash(pa_value_t* o) {
     switch(o->type){
         case pa_string:
             return *PV2STR(o);
@@ -184,9 +185,9 @@ inline pa_value_t* _pa_new_dictionary(pa_dict_t dict) {
     return r;
 }
 
-inline pa_value_t* pa_new_string(string str) {
+inline pa_value_t* pa_new_string(pa_string_t str) {
     pa_value_t *r = new pa_value_t;
-    r->value.ptr = (void*)new string(str);
+    r->value.ptr = (void*)new pa_string_t(str);
     r->type = pa_string;
     return r;
 }
@@ -201,14 +202,14 @@ inline pa_value_t* pa_new_function(pa_func_t f) {
 
 inline pa_value_t* pa_new_class() {
     pa_value_t *r = new pa_value_t;
-    r->value.cls = new(NoGC) pa_class_data;
+    r->value.cls = new pa_class_data;
     r->type = pa_class;
     return r;
 }
 
 inline pa_value_t* pa_new_object(pa_class_data* _class) {
     pa_value_t *r = new pa_value_t;
-    r->value.obj = new(NoGC) pa_object_data(_class);
+    r->value.obj = new pa_object_data(_class);
     r->type = pa_object;
     return r;
 }
@@ -234,7 +235,7 @@ inline pa_value_t* pa_function_call(pa_value_t* func, pa_list_t args, pa_dict_t 
 
 }
 
-pa_value_t* pa_get_argument(pa_list_t& args, pa_dict_t& kwargs, const size_t nth, const string name, pa_value_t *def) {
+pa_value_t* pa_get_argument(pa_list_t& args, pa_dict_t& kwargs, const size_t nth, const pa_string_t name, pa_value_t *def) {
     if(kwargs.count(name)) {
         return kwargs[name];
     } else if(args.size() >= nth+1) {
@@ -257,7 +258,7 @@ inline pa_value_t* pa_operator_setitem(pa_value_t* a, pa_value_t* b, pa_value_t*
     pa_list_t::iterator it;
     pa_dict_t* m;
     pa_value_t* n;
-    string* s;
+    pa_string_t* s;
 
     switch(a->type) {
         case pa_list:
@@ -296,7 +297,7 @@ inline pa_value_t* pa_operator_getitem(pa_value_t* a, pa_value_t* b) {
     pa_list_t* l;
     pa_list_t::iterator it;
     pa_dict_t* m;
-    string* s;
+    pa_string_t* s;
     pa_value_t* n;
 
     switch(a->type) {
@@ -308,7 +309,7 @@ inline pa_value_t* pa_operator_getitem(pa_value_t* a, pa_value_t* b) {
                         printf("Runtime Error: String index out of range.\n");
                         exit(1);
                     }
-                    return pa_new_string(string { s->at(b->value.i64) });
+                    return pa_new_string(pa_string_t { s->at(b->value.i64) });
                 default:
                     goto type_mismatch;
             }
@@ -345,7 +346,7 @@ type_mismatch:
     exit(1);
 }
 
-inline pa_value_t* pa_operator_setattr(pa_value_t* a, string b, pa_value_t* c) {
+inline pa_value_t* pa_operator_setattr(pa_value_t* a, pa_string_t b, pa_value_t* c) {
     pa_value_t* ret;
     switch(a->type) {
         case pa_object:
@@ -366,7 +367,7 @@ type_mismatch:
     printf("Runtime Error: Type mismatch(setattr).\n");
     exit(1);
 }
-inline pa_value_t* pa_operator_getattr(pa_value_t* a, string b) {
+inline pa_value_t* pa_operator_getattr(pa_value_t* a, pa_string_t b) {
     pa_value_t* ret;
     switch(a->type) {
         case pa_object:
@@ -794,7 +795,7 @@ type_mismatch:
 inline pa_value_t* pa_operator_length(pa_value_t* a) {
     pa_value_t* n;
     pa_list_t* l;
-    string* s;
+    pa_string_t* s;
     switch(a->type) {
         case pa_list:
             l = PV2LIST(a);
@@ -819,17 +820,17 @@ type_mismatch:
 }
 
 // Utilities
-inline pa_value_t* pa_import(string name) {
+inline pa_value_t* pa_import(pa_string_t name) {
     replace(name.begin(), name.end(), '.', '/');
 
     //TODO Make it functional on Windows, Mac as well.
-    string file_path;
-    string file_name = "/" + name + ".so";
+    pa_string_t file_path;
+    pa_string_t file_name = "/" + name + ".so";
     const char* pa_home = getenv("PA_HOME");
-    string paths_to_search[] = {
+    pa_string_t paths_to_search[] = {
         ".",
         "./libs",
-        pa_home ? string(pa_home) + "/libs" : "/usr/local/palang/libs"
+        pa_home ? pa_string_t(pa_home) + "/libs" : "/usr/local/palang/libs"
     };
     
     for(unsigned i = 0; i <= 2; i++) {

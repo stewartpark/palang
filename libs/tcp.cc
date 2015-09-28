@@ -40,7 +40,7 @@ pa_value_t* _read(pa_list_t args, pa_dict_t kwargs, pa_value_t* _this) {
     int sock = socket->value.i32;
     
     recv(sock, buffer, 1024, 0);
-    return pa_new_string(string(buffer));  
+    return pa_new_string(pa_string_t(buffer));  
 }
 
 pa_value_t* _write(pa_list_t args, pa_dict_t kwargs, pa_value_t* _this) {

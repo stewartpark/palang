@@ -36,7 +36,7 @@ pa_value_t* __read(pa_list_t args, pa_dict_t kwargs, pa_value_t* _this) {
     size_t szRead = fread(buffer, sizeof(char), 1024, fp);
 
 
-    return pa_new_string(string(buffer));
+    return pa_new_string(pa_string_t(buffer));
 }
 
 pa_value_t* __write(pa_list_t args, pa_dict_t kwargs, pa_value_t* _this) {

@@ -7,5 +7,7 @@ fi;
 
 PAC="python $PA_HOME/pypac"
 
-$PAC libs/paw.pa -l -o libs/paw.so
-$PAC app.pa -o app
+echo PAC libs/paw.pa
+$PAC libs/paw.pa -l -o libs/paw.so $@
+echo PAC app.pa
+$PAC app.pa -o app $@
