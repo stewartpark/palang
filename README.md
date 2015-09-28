@@ -29,6 +29,7 @@ Currently, the only working implentation of Pa is Pypac, which is in the current
  - Unimplemented operators (to different types)
  - Network/file I/O library that is based on libuv
  - the &, !, ? operators
+ - Exception handling
 
 ### Installation
 
