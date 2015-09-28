@@ -19,12 +19,7 @@
 #include <gc/gc_cpp.h>
 #include <gc/gc_allocator.h>
 
-inline void * operator new(size_t n) { return GC_malloc_atomic(n); }
-inline void operator delete(void *) {}
-inline void * operator new[](size_t n) { return GC_malloc_atomic(n); }
-inline void operator delete[](void *) {}
-
-#define pa_list_t list<pa_value_t*,gc_allocator<pa_value_t*>>
+#define pa_list_t list<pa_value_t*>
 #define pa_dict_t map<string,pa_value_t*>
 #define pa_func_t function<pa_value_t*(pa_list_t,pa_dict_t,pa_value_t*)>
 
@@ -73,7 +68,7 @@ class pa_value_t : public gc {
         enum pa_type_t type;
 };
 
-class pa_class_data : public gc {
+class pa_class_data {
     private:
         pa_dict_t members;
         pa_dict_t operators;
@@ -84,7 +79,7 @@ class pa_class_data : public gc {
         pa_value_t* get_operator(string name) { return this->operators[name]; }
 };
 
-class pa_object_data : public gc {
+class pa_object_data {
     private:
         pa_class_data* _class;
         pa_dict_t members;
@@ -155,7 +150,7 @@ inline pa_value_t* pa_new_integer(int64_t v) {
 #define pa_new_list(...) _pa_new_list(pa_list_t{ __VA_ARGS__ })
 inline pa_value_t* _pa_new_list(pa_list_t li) {
     pa_value_t *r = new pa_value_t;
-    pa_list_t* l = ::new(GC) pa_list_t;
+    pa_list_t* l = new pa_list_t;
     *l = li;
     r->value.ptr = (void*)l;
     r->type = pa_list;
@@ -177,7 +172,7 @@ inline string pa_operator_hash(pa_value_t* o) {
 #define pa_new_dictionary(...) _pa_new_dictionary(pa_dict_t{ __VA_ARGS__ })
 inline pa_value_t* _pa_new_dictionary(pa_dict_t dict) {
     pa_value_t *r = new pa_value_t;
-    pa_dict_t* d = ::new(GC) pa_dict_t;
+    pa_dict_t* d = new pa_dict_t;
     *d = dict;
     r->value.ptr = (void*)d;
     r->type = pa_dictionary;
@@ -186,19 +181,14 @@ inline pa_value_t* _pa_new_dictionary(pa_dict_t dict) {
 
 inline pa_value_t* pa_new_string(string str) {
     pa_value_t *r = new pa_value_t;
-    delete &str;
-    string* s = ::new(GC) string;
-    *s = str;
-    r->value.ptr = (void*)s;
+    r->value.ptr = (void*)new string(str);
     r->type = pa_string;
     return r;
 }
 
 inline pa_value_t* pa_new_function(pa_func_t f) {
     pa_value_t *r = new pa_value_t;
-    pa_func_t* ff = ::new(GC) pa_func_t;
-    *ff = f;
-    r->value.func = ff;
+    r->value.func = new pa_func_t(f);
     r->type = pa_function;
     return r;
 
@@ -208,12 +198,6 @@ inline pa_value_t* pa_new_class() {
     pa_value_t *r = new pa_value_t;
     r->value.cls = new pa_class_data;
     r->type = pa_class;
-    return r;
-}
-
-inline pa_value_t* pa_new_object() {
-    pa_value_t *r = new pa_value_t;
-    r->type = pa_object;
     return r;
 }
 
@@ -299,7 +283,7 @@ inline pa_value_t* pa_operator_setitem(pa_value_t* a, pa_value_t* b, pa_value_t*
             goto type_mismatch;
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch([]).\n");
+    printf("Runtime Error: Type mismatch(setitem).\n");
     exit(1);
 }
 
@@ -352,7 +336,7 @@ inline pa_value_t* pa_operator_getitem(pa_value_t* a, pa_value_t* b) {
             goto type_mismatch;
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch([]).\n");
+    printf("Runtime Error: Type mismatch(getitem).\n");
     exit(1);
 }
 
@@ -374,7 +358,7 @@ inline pa_value_t* pa_operator_setattr(pa_value_t* a, string b, pa_value_t* c) {
             goto type_mismatch;
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(.).\n");
+    printf("Runtime Error: Type mismatch(setattr).\n");
     exit(1);
 }
 inline pa_value_t* pa_operator_getattr(pa_value_t* a, string b) {
@@ -396,7 +380,7 @@ inline pa_value_t* pa_operator_getattr(pa_value_t* a, string b) {
             goto type_mismatch;
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(.).\n");
+    printf("Runtime Error: Type mismatch(getattr).\n");
     exit(1);
 }
 
@@ -830,7 +814,6 @@ type_mismatch:
 }
 
 // Utilities
-
 inline pa_value_t* pa_import(string name) {
     replace(name.begin(), name.end(), '.', '/');
 
@@ -871,7 +854,8 @@ inline pa_value_t* pa_import(string name) {
             }
         }));
 
-        return pa_new_object(mod_class->value.cls);
+        pa_value_t* obj = pa_new_object(mod_class->value.cls);
+        return obj;
     } else {
         printf("Runtime Error: %s\n", dlerror());
         exit(1);
@@ -880,8 +864,7 @@ inline pa_value_t* pa_import(string name) {
 
 inline void PA_ENTER(int argc, char** argv, char** env) {
     //TODO 
-    GC_INIT();
-    GC_enable_incremental();
+    GC_INIT(); GC_enable_incremental();
 }
 
 inline int PA_LEAVE(pa_value_t *ret) {
