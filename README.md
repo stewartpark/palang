@@ -39,6 +39,7 @@ Just type the below:
 $ git clone https://github.com/stewartpark/palang
 $ cd palang
 $ pip install -r requirements.txt
+$ sudo apt-get install build-essential g++-4.9 libgc-dev 
 $ ./build_libs.sh
 ```
 

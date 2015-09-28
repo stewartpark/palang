@@ -75,7 +75,7 @@ expr_literal = Group(BOOL | NIL | REAL | INTEGER | STRING | LIST | DICT | FUNC |
 LIST << Group(LBRACK + Optional(delimitedList(Group(expr))) + RBRACK)\
         .setParseAction(lambda t: ["LIST", t[0]])
 
-DICT << Group(LBRACE + Optional(delimitedList(Group(expr_literal) + COLON + Group(expr))) + RBRACE)\
+DICT << Group(LBRACE + Optional(delimitedList(Group(expr_literal + COLON + Group(expr)))) + RBRACE)\
         .setParseAction(lambda t: ["DICT", t[0]])
 
 FUNC << Group(Suppress("func") + Group(def_func_args) + Group(def_stat_block)).setParseAction(lambda t: ["FUNC", t[0]])

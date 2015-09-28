@@ -401,7 +401,15 @@ class Compiler:
         elif ast[0] == 'LIST':
             return self.generator.literal_list(*map(self._expr, ast[1]))
         elif ast[0] == 'DICT':
-            pass
+            kvs = []
+            for x in ast[1]:
+                kvs.append(
+                        self.generator.literal_dict_kv(
+                            self._expr_literal(x[0]),
+                            self._expr(x[1])
+                        )
+                )
+            return self.generator.literal_dict(*kvs)
         else:
             return self._expr_recur(ast)
     def _expr_recur(self, ast):
