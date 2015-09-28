@@ -19,6 +19,11 @@
 #include <gc/gc_cpp.h>
 #include <gc/gc_allocator.h>
 
+inline void * operator new(size_t n) { return GC_malloc(n);  }
+inline void operator delete(void *) {}
+inline void * operator new[](size_t n) { return GC_malloc(n);  }
+inline void operator delete[](void *) {}
+
 #define pa_list_t list<pa_value_t*>
 #define pa_dict_t map<string,pa_value_t*>
 #define pa_func_t function<pa_value_t*(pa_list_t,pa_dict_t,pa_value_t*)>
@@ -68,7 +73,7 @@ class pa_value_t : public gc {
         enum pa_type_t type;
 };
 
-class pa_class_data {
+class pa_class_data : public gc {
     private:
         pa_dict_t members;
         pa_dict_t operators;
@@ -79,7 +84,7 @@ class pa_class_data {
         pa_value_t* get_operator(string name) { return this->operators[name]; }
 };
 
-class pa_object_data {
+class pa_object_data : public gc {
     private:
         pa_class_data* _class;
         pa_dict_t members;
@@ -196,14 +201,14 @@ inline pa_value_t* pa_new_function(pa_func_t f) {
 
 inline pa_value_t* pa_new_class() {
     pa_value_t *r = new pa_value_t;
-    r->value.cls = new pa_class_data;
+    r->value.cls = new(NoGC) pa_class_data;
     r->type = pa_class;
     return r;
 }
 
 inline pa_value_t* pa_new_object(pa_class_data* _class) {
     pa_value_t *r = new pa_value_t;
-    r->value.obj = new pa_object_data(_class);
+    r->value.obj = new(NoGC) pa_object_data(_class);
     r->type = pa_object;
     return r;
 }
