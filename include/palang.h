@@ -20,11 +20,6 @@
 #include <gc/gc_cpp.h>
 #include <gc/gc_allocator.h>
 
-inline void * operator new(size_t n) { return GC_malloc(n);  }
-inline void operator delete(void *) {}
-inline void * operator new[](size_t n) { return GC_malloc(n);  }
-inline void operator delete[](void *) {}
-
 #define pa_string_t basic_string<char,char_traits<char>,gc_allocator<char>>
 #define pa_list_t list<pa_value_t*>
 #define pa_dict_t map<pa_string_t,pa_value_t*>
