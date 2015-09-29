@@ -1,0 +1,15 @@
+
+class HelloException {}
+
+f(x) {
+    raise HelloException()
+    = x
+}
+
+try {
+    a = f(3)
+} except HelloException e {
+    print("HelloException received!\n")
+} finally {
+    print("Done!")
+}

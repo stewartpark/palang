@@ -815,6 +815,10 @@ type_mismatch:
     exit(1);
 }
 
+inline bool pa_instanceof(pa_value_t* o, pa_value_t* cls) {
+    return o->value.obj->get_class() == cls->value.cls;
+}
+
 // Utilities
 inline pa_value_t* pa_import(pa_string_t name) {
     replace(name.begin(), name.end(), '.', '/');

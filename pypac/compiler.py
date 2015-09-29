@@ -108,15 +108,15 @@ class CppGenerator:
         return "break"
     def stat_continue(self):
         return "continue"
-    def stat_throw(self, v):
+    def stat_raise(self, v):
         return "throw " + v + ";"
     def stat_try(self, _try, _excepts=[], _finally=""):
         src = ""
         src += "try{%s}" % (_try,)
-        src += "catch(const pa_value_t* ex){"
+        src += "catch(pa_value_t* ex){" 
         for x in _excepts:
-            src += "if(pa_instanceof(ex, %s)){%s};" % (x[0], x[1])
-        src += "}finally{" + _finally + "}"
+            src += "if(pa_instanceof(ex, %s)){pa_value_t* %s=ex;%s};" % (x[0], x[1], x[2])
+        src += "};{" + _finally + "}"
         return src
     def finalize_line(self, v):
         return v + ";"
@@ -217,7 +217,7 @@ class Compiler:
                 'stat_def_class': self._stat_def_class,
                 'stat_import': self._stat_import,
                 'stat_export': self._stat_export,
-                'stat_throw': self._stat_throw,
+                'stat_raise': self._stat_raise,
                 'stat_try': self._stat_try
             }[stat_name]
             if stat_name in ['stat_export', 'stat_import'] and topmost == False:
@@ -259,10 +259,30 @@ class Compiler:
             return src
         else:
             raise Exception("Semantic error")
-    def _stat_throw(self, v):
-        pass
-    def _stat_try(self, v):
-        pass
+    def _stat_raise(self, ast):
+        if ast[0] == 'stat_raise':
+            return self.generator.stat_raise(self._expr(ast[1]))
+        else:
+            raise Exception("Semantic error")
+    def _stat_try(self, ast):
+        if ast[0] == 'stat_try':
+            _try = ""
+            _catches = []
+            _finally = ""
+            for i, x in enumerate(ast[1]):
+                if i == 0:
+                    _try = "".join(map(lambda y: self._stat(y), x))
+                elif len(x) == 3:
+                    _catches.append([
+                        self._expr_lvalue(x[0][1]),
+                        x[1][1],
+                        ("".join(map(lambda y: self._stat(y), x[2])))
+                    ])
+                else:
+                    _finally = "".join(map(lambda y: self._stat(y), x[0]))
+            return self.generator.stat_try(_try, _catches, _finally)
+        else:
+            raise Exception("Semantic error")
     def _stat_assign(self, ast):
         if ast[0] == 'stat_assign':
             t = ast[1][0]
@@ -619,10 +639,5 @@ class Compiler:
         else:
             raise Exception("Semantic error")
               
-
-         
-
-        
-
 def compile(ast, compiler=Compiler, **kwargs):
     return compiler(ast, **kwargs).compile()
