@@ -115,8 +115,8 @@ class CppGenerator:
         src += "try{%s}" % (_try,)
         src += "catch(pa_value_t* ex){" 
         for x in _excepts:
-            src += "if(pa_instanceof(ex, %s)){pa_value_t* %s=ex;%s};" % (x[0], x[1], x[2])
-        src += "};{" + _finally + "}"
+            src += "if(pa_instanceof(ex, %s)){pa_value_t* %s=ex;%s}else " % (x[0], x[1], x[2])
+        src += "{throw ex;};};{" + _finally + "}"
         return src
     def finalize_line(self, v):
         return v + ";"
