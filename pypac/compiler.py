@@ -2,7 +2,7 @@ class CppGenerator:
     HEADER = "/* Automatically compiled from Pa language */\n#include <palang.h>"
     ENTRYPOINT = "int main(int argc,char**argv,char**env){PA_ENTER(argc,argv,env);return PA_LEAVE(PA_INIT());}"
     def finalize(self, code, has_entrypoint=True):
-        return "%s\nextern \"C\" pa_value_t* PA_INIT(){pa_value_t* _this=pa_new_nil();INTRINSICS();%s;};%s" % (CppGenerator.HEADER, code, CppGenerator.ENTRYPOINT if has_entrypoint else "")
+        return "%s\nextern \"C\" pa_value_t* PA_INIT(){try{pa_value_t* _this=pa_new_nil();INTRINSICS();%s;}catch(pa_value_t*ex){pa_print_value(ex);}};%s" % (CppGenerator.HEADER, code, CppGenerator.ENTRYPOINT if has_entrypoint else "")
     def cfunc_call(self, name, *args):
         return name + "(" + (",".join(args)) + ")"
     def func_call(self, name, this="_this", *args, **kwargs):
@@ -129,7 +129,7 @@ class Compiler:
         self.root = ast
         self.exports = exports
         self.imports = imports
-        self.intrinsics = intrinsics + ["this"]
+        self.intrinsics = intrinsics + ["this"] + ["DivideByZeroException", "NoSuchAttributeException", "ArgumentRequiredException", "NotHashableException", "NotCallableException", "TypeMismatchException", "ImportException"]
         self.is_library = is_library
     def append(self, src):
         self.src += src
@@ -220,8 +220,8 @@ class Compiler:
                 'stat_raise': self._stat_raise,
                 'stat_try': self._stat_try
             }[stat_name]
-            if stat_name in ['stat_export', 'stat_import'] and topmost == False:
-                raise Exception("import/exports can be used only in the global scope.")
+            #if stat_name in ['stat_export', 'stat_import'] and topmost == False:
+            #    raise Exception("import/exports can be used only in the global scope.")
             return self.generator.finalize_line(stat_fn(ast[1]))
         else:
             raise Exception("Semantic error")
@@ -273,9 +273,10 @@ class Compiler:
                 if i == 0:
                     _try = "".join(map(lambda y: self._stat(y), x))
                 elif len(x) == 3:
+                    self.define(x[1][1], read_only=True)
                     _catches.append([
                         self._expr_rvalue(x[0][1]),
-                        x[1][1],
+                        self.generator.var_name(x[1][1]),
                         ("".join(map(lambda y: self._stat(y), x[2])))
                     ])
                 else:

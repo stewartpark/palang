@@ -23,13 +23,13 @@ Currently, the only working implentation of Pa is Pypac, which is in the current
  - Class/Instance (constructor, destructor, methods, properties, operator overloading)
  - -> operators(list -> func)
  - Garbage collector (Boehm GC)
+ - Exception handling
 
 ### Future work
 
  - Unimplemented operators (to different types)
  - Network/file I/O library that is based on libuv
  - the &, !, ? operators
- - Exception handling
 
 ### Installation
 

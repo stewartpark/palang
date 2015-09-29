@@ -107,9 +107,44 @@ class pa_object_data : public gc {
             }
         }
 };
+inline pa_value_t* pa_new_class();
+inline pa_value_t* pa_new_object(pa_class_data*);
+inline pa_value_t* pa_new_string(pa_string_t);
+inline pa_value_t* pa_new_function(pa_func_t);
+
+// Exceptions
+inline pa_value_t* pa_define_runtime_error(const pa_string_t msg) {
+    pa_value_t* c = new(NoGC) pa_value_t;
+    c->value.cls = new pa_class_data;
+    c->type = pa_class;
+
+    pa_value_t* f = new(NoGC) pa_value_t;
+    f->type = pa_function;
+    f->value.func = new(NoGC) pa_func_t([=](pa_list_t args, pa_dict_t kwargs, pa_value_t* _this) -> pa_value_t* {
+        return pa_new_string(msg + ": " + *PV2STR(_this->value.obj->get_member("cause")) + "\n");
+    });
+
+    c->value.cls->set_member("toString", f);
+    return c;
+}
+
+inline pa_value_t* pa_new_exception(pa_value_t* cls, const pa_string_t cause) {
+    pa_value_t* o = pa_new_object(cls->value.cls);
+    o->value.obj->set_member("cause", pa_new_string(cause));
+    return o;
+}
+
+pa_value_t* _DivideByZeroException = pa_define_runtime_error("DivideByZeroException");
+pa_value_t* _NoSuchAttributeException = pa_define_runtime_error("NoSuchAttributeException");
+pa_value_t* _ArgumentRequiredException = pa_define_runtime_error("ArgumentRequiredException");
+pa_value_t* _OutOfIndexException = pa_define_runtime_error("OutOfIndexException");
+pa_value_t* _NotHashableException = pa_define_runtime_error("NotHashableException");
+pa_value_t* _NotCallableException = pa_define_runtime_error("NotCallableException");
+pa_value_t* _TypeMismatchException = pa_define_runtime_error("TypeMismatchException");
+pa_value_t* _ImportException = pa_define_runtime_error("ImportException");
+
 
 // Types
-
 inline pa_value_t* pa_new_nil() {
     static pa_value_t *r = NULL;
     if(!r) { 
@@ -130,8 +165,7 @@ inline bool pa_evaluate_into_boolean(pa_value_t* a) {
             goto type_mismatch; 
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(logical).\n");
-    exit(1);
+    throw pa_new_exception(_TypeMismatchException, "logical");
 }
 
 
@@ -165,8 +199,7 @@ inline pa_string_t pa_operator_hash(pa_value_t* o) {
             return *PV2STR(o);
             break;
         default:
-            printf("Runtime Error: Non-hashable.\n");
-            exit(1);
+            throw pa_new_exception(_NotHashableException, "non-hashable type");
     }
 }
 
@@ -224,9 +257,7 @@ inline pa_value_t* pa_function_call(pa_value_t* func, pa_list_t args, pa_dict_t 
         }
         return new_obj;
     } else {
-        printf("func_type: %d\n", func->type);
-        printf("Runtime Error: calling a non-callable value.\n");
-        exit(1);
+        throw pa_new_exception(_NotCallableException, "non-callable type");
     } 
 
 }
@@ -240,8 +271,7 @@ pa_value_t* pa_get_argument(pa_list_t& args, pa_dict_t& kwargs, const size_t nth
         return *it;
     } else {
         if(def->type == pa_nil) {
-            printf("Runtime Error: %s is required.\n", name.c_str());
-            exit(1);
+            throw pa_new_exception(_ArgumentRequiredException, name);
         } else {
             return def;
         }
@@ -262,8 +292,7 @@ inline pa_value_t* pa_operator_setitem(pa_value_t* a, pa_value_t* b, pa_value_t*
             switch(b->type) {
                 case pa_integer:
                     if(l->size() <= b->value.i64) {
-                        printf("Runtime Error: List index out of range.\n");
-                        exit(1);
+                        throw pa_new_exception(_OutOfIndexException, "list index out of range");
                     }
                     it = l->begin();
                     advance(it, b->value.i64);
@@ -285,8 +314,7 @@ inline pa_value_t* pa_operator_setitem(pa_value_t* a, pa_value_t* b, pa_value_t*
             goto type_mismatch;
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(setitem).\n");
-    exit(1);
+    throw pa_new_exception(_TypeMismatchException, "setitem");
 }
 
 inline pa_value_t* pa_operator_getitem(pa_value_t* a, pa_value_t* b) {
@@ -302,8 +330,7 @@ inline pa_value_t* pa_operator_getitem(pa_value_t* a, pa_value_t* b) {
                 case pa_integer:
                     s = PV2STR(a);      
                     if(s->length() <= b->value.i64) {
-                        printf("Runtime Error: String index out of range.\n");
-                        exit(1);
+                        throw pa_new_exception(_OutOfIndexException, "string index out of range");
                     }
                     return pa_new_string(pa_string_t { s->at(b->value.i64) });
                 default:
@@ -314,8 +341,7 @@ inline pa_value_t* pa_operator_getitem(pa_value_t* a, pa_value_t* b) {
             switch(b->type) {
                 case pa_integer:
                     if(l->size() <= b->value.i64) {
-                        printf("Runtime Error: List index out of range.\n");
-                        exit(1);
+                        throw pa_new_exception(_OutOfIndexException, "list index out of range");
                     }
 
                     it = l->begin();
@@ -338,8 +364,7 @@ inline pa_value_t* pa_operator_getitem(pa_value_t* a, pa_value_t* b) {
             goto type_mismatch;
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(getitem).\n");
-    exit(1);
+    throw pa_new_exception(_TypeMismatchException, "getitem");
 }
 
 inline pa_value_t* pa_operator_setattr(pa_value_t* a, pa_string_t b, pa_value_t* c) {
@@ -360,8 +385,7 @@ inline pa_value_t* pa_operator_setattr(pa_value_t* a, pa_string_t b, pa_value_t*
             goto type_mismatch;
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(setattr).\n");
-    exit(1);
+    throw pa_new_exception(_TypeMismatchException, "setattr");
 }
 inline pa_value_t* pa_operator_getattr(pa_value_t* a, pa_string_t b) {
     pa_value_t* ret;
@@ -373,8 +397,7 @@ inline pa_value_t* pa_operator_getattr(pa_value_t* a, pa_string_t b) {
                 if(ret) {
                     ret = pa_function_call(ret, pa_list_t{a, pa_new_string(b)}, pa_dict_t{}, a);
                 } else {
-                    printf("Runtime Error: no such attribute/method.\n");
-                    exit(1); 
+                    throw pa_new_exception(_NoSuchAttributeException, b);
                 }
             }
             return ret;
@@ -382,8 +405,7 @@ inline pa_value_t* pa_operator_getattr(pa_value_t* a, pa_string_t b) {
             goto type_mismatch;
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(getattr).\n");
-    exit(1);
+    throw pa_new_exception(_TypeMismatchException, "getattr");
 }
 
 inline pa_value_t* pa_operator_add(pa_value_t* a, pa_value_t* b) {
@@ -433,8 +455,7 @@ inline pa_value_t* pa_operator_add(pa_value_t* a, pa_value_t* b) {
             goto type_mismatch; 
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(+).\n");
-    exit(1);
+    throw pa_new_exception(_TypeMismatchException, "+");
 }
 
 inline pa_value_t* pa_operator_subtract(pa_value_t *a, pa_value_t *b) {
@@ -458,8 +479,7 @@ inline pa_value_t* pa_operator_subtract(pa_value_t *a, pa_value_t *b) {
             goto type_mismatch; 
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(-).\n");
-    exit(1);
+    throw pa_new_exception(_TypeMismatchException, "-");
 }
 
 inline pa_value_t* pa_operator_multiply(pa_value_t* a, pa_value_t* b) {
@@ -483,8 +503,7 @@ inline pa_value_t* pa_operator_multiply(pa_value_t* a, pa_value_t* b) {
             goto type_mismatch; 
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(*).\n");
-    exit(1);
+    throw pa_new_exception(_TypeMismatchException, "*");
 }
 
 inline pa_value_t* pa_operator_divide(pa_value_t* a, pa_value_t* b) {
@@ -508,8 +527,7 @@ inline pa_value_t* pa_operator_divide(pa_value_t* a, pa_value_t* b) {
             goto type_mismatch; 
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(/).\n");
-    exit(1);
+    throw pa_new_exception(_TypeMismatchException, "/");
 }
 
 inline pa_value_t* pa_operator_modulo(pa_value_t* a, pa_value_t* b) {
@@ -533,8 +551,7 @@ inline pa_value_t* pa_operator_modulo(pa_value_t* a, pa_value_t* b) {
             goto type_mismatch; 
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(mod).\n");
-    exit(1);
+    throw pa_new_exception(_TypeMismatchException, "mod");
 }
 
 
@@ -566,8 +583,7 @@ inline pa_value_t* pa_operator_eq(pa_value_t* a, pa_value_t* b) {
             goto type_mismatch; 
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(==).\n");
-    exit(1);
+    throw pa_new_exception(_TypeMismatchException, "==");
 }
 
 inline pa_value_t* pa_operator_neq(pa_value_t* a, pa_value_t* b) {
@@ -598,8 +614,7 @@ inline pa_value_t* pa_operator_neq(pa_value_t* a, pa_value_t* b) {
             goto type_mismatch; 
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(!=).\n");
-    exit(1);
+    throw pa_new_exception(_TypeMismatchException, "!=");
 }
 
 inline pa_value_t* pa_operator_gt(pa_value_t* a, pa_value_t* b) {
@@ -613,7 +628,7 @@ inline pa_value_t* pa_operator_gt(pa_value_t* a, pa_value_t* b) {
                     goto type_mismatch;
             }
         case pa_object:
-            n = a->value.obj->get_operator(">=");
+            n = a->value.obj->get_operator(">");
             if(n) {
                 return pa_function_call(n, pa_list_t{b}, pa_dict_t{}, a);
             } else {
@@ -623,8 +638,7 @@ inline pa_value_t* pa_operator_gt(pa_value_t* a, pa_value_t* b) {
             goto type_mismatch; 
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(>).\n");
-    exit(1);
+    throw pa_new_exception(_TypeMismatchException, ">");
 }
 
 inline pa_value_t* pa_operator_gte(pa_value_t* a, pa_value_t* b) {
@@ -648,8 +662,7 @@ inline pa_value_t* pa_operator_gte(pa_value_t* a, pa_value_t* b) {
             goto type_mismatch; 
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(>=).\n");
-    exit(1);
+    throw pa_new_exception(_TypeMismatchException, ">=");
 }
 
 inline pa_value_t* pa_operator_lt(pa_value_t* a, pa_value_t* b) {
@@ -673,8 +686,7 @@ inline pa_value_t* pa_operator_lt(pa_value_t* a, pa_value_t* b) {
             goto type_mismatch; 
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(<).\n");
-    exit(1);
+    throw pa_new_exception(_TypeMismatchException, "<");
 }
 
 inline pa_value_t* pa_operator_lte(pa_value_t* a, pa_value_t* b) {
@@ -698,8 +710,7 @@ inline pa_value_t* pa_operator_lte(pa_value_t* a, pa_value_t* b) {
             goto type_mismatch; 
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(<=).\n");
-    exit(1);
+    throw pa_new_exception(_TypeMismatchException, "<=");
 }
 
 inline pa_value_t* pa_operator_right(pa_value_t* a, pa_value_t* b) {
@@ -733,8 +744,7 @@ inline pa_value_t* pa_operator_right(pa_value_t* a, pa_value_t* b) {
             goto type_mismatch; 
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(->).\n");
-    exit(1);
+    throw pa_new_exception(_TypeMismatchException, "->");
 }
 
 
@@ -759,8 +769,7 @@ inline pa_value_t* pa_operator_or(pa_value_t* a, pa_value_t* b) {
             goto type_mismatch; 
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(or).\n");
-    exit(1);
+    throw pa_new_exception(_TypeMismatchException, "or");
 }
 
 inline pa_value_t* pa_operator_and(pa_value_t* a, pa_value_t* b) {
@@ -784,8 +793,7 @@ inline pa_value_t* pa_operator_and(pa_value_t* a, pa_value_t* b) {
             goto type_mismatch; 
     }
 type_mismatch:
-    printf("Runtime Error: Type mismatch(and).\n");
-    exit(1);
+    throw pa_new_exception(_TypeMismatchException, "and");
 }
 
 inline pa_value_t* pa_operator_length(pa_value_t* a) {
@@ -811,8 +819,7 @@ inline pa_value_t* pa_operator_length(pa_value_t* a) {
     }
 
 type_mismatch:
-    printf("Runtime Error: Type mismatch(length).\n");
-    exit(1);
+    throw pa_new_exception(_TypeMismatchException, "length");
 }
 
 inline bool pa_instanceof(pa_value_t* o, pa_value_t* cls) {
@@ -855,17 +862,47 @@ inline pa_value_t* pa_import(pa_string_t name) {
             if(attr){ 
                 return attr; 
             } else {
-                printf("Runtime Error: no such name in the module: %s.%s\n", name.c_str(), PV2STR(attr_name)->c_str());
-                exit(1);
+                throw pa_new_exception(_ImportException, pa_string_t("no such name in the module: ") + name);
             }
         }));
 
         pa_value_t* obj = pa_new_object(mod_class->value.cls);
         return obj;
     } else {
-        printf("Runtime Error: %s\n", dlerror());
-        exit(1);
+        throw pa_new_exception(_ImportException, dlerror());
     }
+}
+
+
+inline void pa_print_value(pa_value_t* v) {
+    pa_value_t* n;
+    pa_list_t* l;
+    pa_dict_t* d;
+    switch(v->type) { 
+        case pa_nil: 
+            printf("nil"); 
+            break; 
+        case pa_integer: 
+            printf("%lld", (long long int)v->value.i64); 
+            break; 
+        case pa_float: 
+            printf("%lf", (double)v->value.f64); 
+            break; 
+        case pa_string: 
+            printf("%s", PV2STR(v)->c_str()); 
+            break; 
+        case pa_object:
+            n = v->value.obj->get_member("toString");
+            if(n) {
+                n = pa_function_call(n, pa_list_t{}, pa_dict_t{}, v);
+                pa_print_value(n);
+                break;
+            } else {
+                throw pa_new_exception(_NoSuchAttributeException, "toString");   
+            }
+        default: 
+            throw pa_new_exception(_TypeMismatchException, "print");   
+    }    
 }
 
 inline void PA_ENTER(int argc, char** argv, char** env) {
@@ -897,32 +934,14 @@ inline int PA_LEAVE(pa_value_t *ret) {
             } \
             return l; \
         } else { \
-            printf("Runtime Error: Type mismatch(range).\n"); \
-            exit(1); \
+            throw pa_new_exception(_TypeMismatchException, "range"); \
         } \
     }); \
     _print = pa_new_function([](pa_list_t args, pa_dict_t kwargs, pa_value_t* _this) -> pa_value_t* { \
         pa_list_t::iterator it; \
         for(it = args.begin(); it != args.end(); ++it) { \
             pa_value_t* msg = *it; \
-            switch(msg->type) { \
-                case pa_nil: \
-                    printf("nil"); \
-                    break; \
-                case pa_integer: \
-                    printf("%lld", (long long int)msg->value.i64); \
-                    break; \
-                case pa_float: \
-                    printf("%lf", (double)msg->value.f64); \
-                    break; \
-                case pa_string: \
-                    printf("%s", PV2STR(msg)->c_str()); \
-                    break; \
-                default: \
-                    printf("Runtime Error: print() cannot print the value. (Type:%d)\n", msg->type); \
-                    exit(1); \
-                    break; \
-            } \
+            pa_print_value(msg); \
         } \
         return pa_new_nil(); \
     }); \
@@ -934,17 +953,7 @@ inline int PA_LEAVE(pa_value_t *ret) {
     }); \
     _len = pa_new_function([](pa_list_t args, pa_dict_t kwargs, pa_value_t* _this) -> pa_value_t* { \
         pa_value_t *o = pa_get_argument(args, kwargs, 0, "object", pa_new_nil()); \
-        switch(o->type) {\
-            case pa_list: \
-                return pa_new_integer(PV2LIST(o)->size()); \
-            case pa_string: \
-                return pa_new_integer(PV2STR(o)->length()); \
-            default: \
-                printf("Runtime Error: type mismatch(%d).\n", o->type); \
-                exit(1); \
-                break; \
-        } \
+        return pa_operator_length(o); \
     });
-
 
 #endif
