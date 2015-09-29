@@ -274,7 +274,7 @@ class Compiler:
                     _try = "".join(map(lambda y: self._stat(y), x))
                 elif len(x) == 3:
                     _catches.append([
-                        self._expr_lvalue(x[0][1]),
+                        self._expr_rvalue(x[0][1]),
                         x[1][1],
                         ("".join(map(lambda y: self._stat(y), x[2])))
                     ])

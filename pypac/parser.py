@@ -118,7 +118,7 @@ stat_try = Group(Suppress("try") +
         Group(expr_stat_block) + 
         OneOrMore(Group(
             Suppress("except") +
-            Group(expr_lvalue) +
+            Group(expr_rvalue) +    
             Group(IDENT) +
             Group(expr_stat_block)
         )) +
