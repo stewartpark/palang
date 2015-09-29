@@ -108,6 +108,16 @@ class CppGenerator:
         return "break"
     def stat_continue(self):
         return "continue"
+    def stat_throw(self, v):
+        return "throw " + v + ";"
+    def stat_try(self, _try, _excepts=[], _finally=""):
+        src = ""
+        src += "try{%s}" % (_try,)
+        src += "catch(const pa_value_t* ex){"
+        for x in _excepts:
+            src += "if(pa_instanceof(ex, %s)){%s};" % (x[0], x[1])
+        src += "}finally{" + _finally + "}"
+        return src
     def finalize_line(self, v):
         return v + ";"
     
@@ -206,7 +216,9 @@ class Compiler:
                 'stat_ret': self._stat_ret,
                 'stat_def_class': self._stat_def_class,
                 'stat_import': self._stat_import,
-                'stat_export': self._stat_export
+                'stat_export': self._stat_export,
+                'stat_throw': self._stat_throw,
+                'stat_try': self._stat_try
             }[stat_name]
             if stat_name in ['stat_export', 'stat_import'] and topmost == False:
                 raise Exception("import/exports can be used only in the global scope.")
@@ -247,6 +259,10 @@ class Compiler:
             return src
         else:
             raise Exception("Semantic error")
+    def _stat_throw(self, v):
+        pass
+    def _stat_try(self, v):
+        pass
     def _stat_assign(self, ast):
         if ast[0] == 'stat_assign':
             t = ast[1][0]

@@ -114,7 +114,21 @@ stat_break = Group(Suppress("break")).setParseAction(lambda t: ["stat_break"])
 stat_continue = Group(Suppress("continue")).setParseAction(lambda t: ["stat_continue"])
 stat_import = Group(Suppress("import") + Group(Group(PACKAGE_NAME) + Optional(Group(Suppress("as") + IDENT)))).setParseAction(lambda t: ["stat_import", t[0]])
 stat_export = Group(Suppress("export") + Group(Group(IDENT) + Optional(Group(Suppress("as") + IDENT)))).setParseAction(lambda t: ["stat_export", t[0]])
-stat << Group((stat_def_class | stat_import | stat_export | stat_if | stat_for | stat_while | stat_break | stat_continue | stat_assign | stat_ret | stat_expr) + Optional(NEWLINE)).setParseAction(lambda t: ["stat", t[0]])
+stat_try = Group(Suppress("try") + 
+        Group(expr_stat_block) + 
+        Group(OneOrMore(Group(
+            Suppress("except") +
+            Group(expr_lvalue) +
+            Group(IDENT) +
+            Group(expr_stat_block)
+        ))) +
+        Optional(Group(
+            Suppress("finally") +
+            Group(expr_stat_block)
+        ))
+).setParseAction(lambda t: ["stat_try", t[0]])
+stat_throw = Group(Suppress("throw") + Group(expr)).setParseAction(lambda t: ["stat_throw", t[0]])
+stat << Group((stat_def_class | stat_import | stat_export | stat_try | stat_throw | stat_if | stat_for | stat_while | stat_break | stat_continue | stat_assign | stat_ret | stat_expr) + Optional(NEWLINE)).setParseAction(lambda t: ["stat", t[0]])
 
 # Program
 program = ZeroOrMore(Group(stat)).setParseAction(lambda t: ["program", t])
